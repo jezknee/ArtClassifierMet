@@ -51,6 +51,14 @@ def get_with_retry(session, url, headers=None, params=None, max_retries=3):
             response = session.get(url, headers=headers, params=params, timeout=30)
             response.raise_for_status()
             return response
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 403:
+                wait_time = (2 ** attempt) * 10  # Exponential backoff, longer for 403
+                print(f"403 Forbidden (attempt {attempt + 1}/{max_retries}): {e}")
+                print(f"Waiting {wait_time}s before retry...")
+                time.sleep(wait_time)
+                continue
+            raise
         except (requests.exceptions.SSLError, 
                 requests.exceptions.ConnectionError) as e:
             print(f"SSL/Connection error (attempt {attempt + 1}/{max_retries}): {e}")
