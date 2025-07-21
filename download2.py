@@ -14,6 +14,14 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import urllib3
 import random
+import sys
+import codecs
+
+# Set console to UTF-8 mode
+if sys.platform == 'win32':
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
+
 
 # Disable SSL warnings if needed
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -147,6 +155,20 @@ def filter_objects_for_ml(sample_size=10, only_open_access=True):
         print(f"Error filtering objects: {e}")
         return []
 
+def get_existing_downloads():
+    """Get set of object IDs that have already been downloaded"""
+    existing = set()
+    
+    # Check processed images directory
+    processed_dir = "Data/Images/Processed"
+    if os.path.exists(processed_dir):
+        for filename in os.listdir(processed_dir):
+            if filename.endswith('.jpg'):
+                object_id = filename.replace('.jpg', '')
+                existing.add(int(object_id))
+    
+    return existing
+
 def download_and_process_image(object_data, target_size=(224, 224)):
     """Download and preprocess image for ML"""
     USER_AGENTS = [
@@ -249,10 +271,23 @@ def download_images_sequential(dataset_df):
     """Download images one by one for more stable downloads"""
     print(f"Starting sequential download of {len(dataset_df)} images...")
     
+    # Get existing downloads
+    existing_downloads = get_existing_downloads()
+    print(f"Found {len(existing_downloads)} existing downloads")
+    
     successful_downloads = []
     failed_downloads = []
+    skipped_downloads = []
     
     for idx, row in dataset_df.iterrows():
+        object_id = row['object_id']
+        
+        # Skip if already downloaded
+        if object_id in existing_downloads:
+            print(f"Skipping image {idx + 1}/{len(dataset_df)} (already downloaded)")
+            skipped_downloads.append(object_id)
+            continue
+
         print(f"Processing image {idx + 1}/{len(dataset_df)}")
         result = download_and_process_image(row)
         
@@ -264,7 +299,10 @@ def download_images_sequential(dataset_df):
         # Rate limiting between downloads - increased delay
         time.sleep(1.0)  # Increased from 0.1 to 1 second
     
-    print(f"Sequential download complete: {len(successful_downloads)} successful, {len(failed_downloads)} failed")
+    print(f"\nDownload complete:")
+    print(f"- {len(successful_downloads)} successful")
+    print(f"- {len(failed_downloads)} failed")
+    print(f"- {len(skipped_downloads)} skipped (already downloaded)")
     
     if failed_downloads:
         print("Failed downloads:")
@@ -317,7 +355,9 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
                     'artist_display_name': obj_data.get('artistDisplayName', 'Unknown')
                 })
                 domain_status = "Public Domain" if is_public_domain else "Rights Reserved"
-                print(f"Added painting: {obj_data.get('title', 'Untitled')} ({domain_status})")
+                title = obj_data.get('title', 'Untitled').encode('ascii', 'replace').decode('ascii')
+                print(f"Added painting: {title} ({domain_status})")
+                #print(f"Added painting: {obj_data.get('title', 'Untitled')} ({domain_status})")
             else:
                 print(f"Skipped (classification: {classification})")
         
