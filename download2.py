@@ -283,9 +283,9 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings"):
                     'classification': classification,
                     'image_url': obj_data['primaryImage']
                 })
-                print(f"  ✓ Added painting: {obj_data.get('title', 'Untitled')} ({classification})")
+                print(f"Added painting: {obj_data.get('title', 'Untitled')} ({classification})")
             else:
-                print(f"  ✗ Skipped (classification: {classification})")
+                print(f"Skipped (classification: {classification})")
         
         # More conservative rate limiting
         time.sleep(0.05)
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     # Test with small sample
     try:
         print("Filtering objects...")
-        filtered_ids = filter_objects_for_ml(sample_size=5)
+        filtered_ids = filter_objects_for_ml(sample_size=5000)
         print(f"Found {len(filtered_ids)} objects")
         
         if len(filtered_ids) > 0:
