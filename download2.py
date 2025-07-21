@@ -107,7 +107,7 @@ def get_object_details(object_id):
 def filter_objects_for_ml(sample_size=10):
     search_params = {
         'hasImages': 'true',
-        'q': '*',
+        'q': 'Paintings',  # Search for paintings specifically
     }
     
     session = create_session_with_retries()
@@ -149,8 +149,19 @@ def download_and_process_image(object_data, target_size=(224, 224)):
     
     # Create new session for image download
     session = create_session_with_retries()
+    
+    # Enhanced headers to mimic a real browser and avoid 403 errors
     headers = {
-        'User-Agent': 'MetMuseum-ML-Dataset/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://www.metmuseum.org/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
     }
     
     try:
@@ -159,6 +170,10 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         os.makedirs("Data/Images/Processed", exist_ok=True)
         
         print(f"Downloading image for object {object_id}...")
+        print(f"Image URL: {image_url}")
+        
+        # Add delay before download to be respectful
+        time.sleep(0.5)
         
         # Download image with retry logic
         response = get_with_retry(session, image_url, headers=headers)
@@ -226,8 +241,8 @@ def download_images_sequential(dataset_df):
         else:
             failed_downloads.append(result)
         
-        # Rate limiting between downloads
-        time.sleep(0.1)
+        # Rate limiting between downloads - increased delay
+        time.sleep(1.0)  # Increased from 0.1 to 1 second
     
     print(f"Sequential download complete: {len(successful_downloads)} successful, {len(failed_downloads)} failed")
     
@@ -238,31 +253,39 @@ def download_images_sequential(dataset_df):
     
     return successful_downloads
 
-def create_ml_dataset(filtered_object_ids):
+def create_ml_dataset(filtered_object_ids, target_classification="Paintings"):
     # Create data directory
     os.makedirs('data', exist_ok=True)
     
     # Collect metadata
     metadata_list = []
     
-    print(f"Processing {len(filtered_object_ids)} objects...")
+    print(f"Processing {len(filtered_object_ids)} objects, filtering for classification: {target_classification}...")
     
     for i, object_id in enumerate(filtered_object_ids):
         print(f"Processing object {i+1}/{len(filtered_object_ids)}: {object_id}")
         
         obj_data = get_object_details(object_id)
         
+        # Check if object has image AND matches classification
         if obj_data.get('primaryImage'):  # Has image
-            metadata_list.append({
-                'object_id': obj_data['objectID'],
-                'department': obj_data.get('department', 'Unknown'),
-                'object_name': obj_data.get('objectName', 'Unknown'),
-                'culture': obj_data.get('culture', 'Unknown'),
-                'period': obj_data.get('period', 'Unknown'),
-                'medium': obj_data.get('medium', 'Unknown'),
-                'classification': obj_data.get('classification', 'Unknown'),
-                'image_url': obj_data['primaryImage']
-            })
+            classification = obj_data.get('classification', 'Unknown')
+            
+            # Filter by classification (case-insensitive)
+            if target_classification.lower() in classification.lower():
+                metadata_list.append({
+                    'object_id': obj_data['objectID'],
+                    'department': obj_data.get('department', 'Unknown'),
+                    'object_name': obj_data.get('objectName', 'Unknown'),
+                    'culture': obj_data.get('culture', 'Unknown'),
+                    'period': obj_data.get('period', 'Unknown'),
+                    'medium': obj_data.get('medium', 'Unknown'),
+                    'classification': classification,
+                    'image_url': obj_data['primaryImage']
+                })
+                print(f"  ✓ Added painting: {obj_data.get('title', 'Untitled')} ({classification})")
+            else:
+                print(f"  ✗ Skipped (classification: {classification})")
         
         # More conservative rate limiting
         time.sleep(0.05)
@@ -270,10 +293,10 @@ def create_ml_dataset(filtered_object_ids):
     if metadata_list:
         df = pd.DataFrame(metadata_list)
         df.to_csv('data/metadata.csv', index=False)
-        print(f"Saved metadata for {len(metadata_list)} objects")
+        print(f"\nSaved metadata for {len(metadata_list)} paintings (filtered from {len(filtered_object_ids)} total objects)")
         return df
     else:
-        print("No objects with images found")
+        print("No paintings with images found")
         return pd.DataFrame()
 
 # Example usage
@@ -286,7 +309,7 @@ if __name__ == "__main__":
         
         if len(filtered_ids) > 0:
             print("Creating dataset...")
-            dataset = create_ml_dataset(filtered_ids)
+            dataset = create_ml_dataset(filtered_ids, target_classification="Paintings")
             print(dataset.head())
             print("Dataset creation complete!")
             
