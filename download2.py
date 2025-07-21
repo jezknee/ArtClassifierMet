@@ -136,11 +136,16 @@ def filter_objects_for_ml(sample_size=10):
 
 def download_and_process_image(object_data, target_size=(224, 224)):
     """Download and preprocess image for ML"""
-    object_id = object_data['objectID']
-    image_url = object_data.get('primaryImage')
+    # Handle both dictionary and DataFrame row inputs
+    if hasattr(object_data, 'to_dict'):
+        object_data = object_data.to_dict()
+    
+    object_id = object_data.get('object_id', object_data.get('objectID'))
+    image_url = object_data.get('image_url', object_data.get('primaryImage'))
     
     if not image_url:
-        return None
+        print(f"No image URL for object {object_id}")
+        return {'object_id': object_id, 'success': False, 'error': 'No image URL'}
     
     # Create new session for image download
     session = create_session_with_retries()
@@ -152,6 +157,8 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         # Create directories if they don't exist
         os.makedirs("Data/Images/Raw", exist_ok=True)
         os.makedirs("Data/Images/Processed", exist_ok=True)
+        
+        print(f"Downloading image for object {object_id}...")
         
         # Download image with retry logic
         response = get_with_retry(session, image_url, headers=headers)
@@ -176,6 +183,8 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         processed_path = f"Data/Images/Processed/{object_id}.jpg"
         cv2.imwrite(processed_path, cv2.cvtColor(processed_image, cv2.COLOR_RGB2BGR))
         
+        print(f"Successfully processed image for object {object_id}")
+        
         return {
             'object_id': object_id,
             'raw_path': raw_path,
@@ -188,11 +197,46 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         return {'object_id': object_id, 'success': False, 'error': str(e)}
 
 # Parallel downloading with reduced workers to avoid overwhelming the server
-def download_images_parallel(object_data_list, max_workers=5):
+def download_images_parallel(object_data_list, max_workers=3):
+    """Download images in parallel with conservative threading"""
+    print(f"Starting parallel download of {len(object_data_list)} images with {max_workers} workers...")
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(download_and_process_image, object_data_list))
     
-    return [r for r in results if r and r['success']]
+    successful = [r for r in results if r and r['success']]
+    failed = [r for r in results if r and not r['success']]
+    
+    print(f"Download complete: {len(successful)} successful, {len(failed)} failed")
+    return successful
+
+def download_images_sequential(dataset_df):
+    """Download images one by one for more stable downloads"""
+    print(f"Starting sequential download of {len(dataset_df)} images...")
+    
+    successful_downloads = []
+    failed_downloads = []
+    
+    for idx, row in dataset_df.iterrows():
+        print(f"Processing image {idx + 1}/{len(dataset_df)}")
+        result = download_and_process_image(row)
+        
+        if result['success']:
+            successful_downloads.append(result)
+        else:
+            failed_downloads.append(result)
+        
+        # Rate limiting between downloads
+        time.sleep(0.1)
+    
+    print(f"Sequential download complete: {len(successful_downloads)} successful, {len(failed_downloads)} failed")
+    
+    if failed_downloads:
+        print("Failed downloads:")
+        for failed in failed_downloads:
+            print(f"  Object {failed['object_id']}: {failed.get('error', 'Unknown error')}")
+    
+    return successful_downloads
 
 def create_ml_dataset(filtered_object_ids):
     # Create data directory
@@ -245,6 +289,27 @@ if __name__ == "__main__":
             dataset = create_ml_dataset(filtered_ids)
             print(dataset.head())
             print("Dataset creation complete!")
+            
+            if not dataset.empty:
+                print("\nDownloading images...")
+                
+                # Choose download method (sequential is more stable)
+                use_parallel = False  # Set to True for parallel downloads
+                
+                if use_parallel:
+                    successful_downloads = download_images_parallel(dataset.to_dict('records'))
+                else:
+                    successful_downloads = download_images_sequential(dataset)
+                
+                print(f"\nImage download complete! Successfully downloaded {len(successful_downloads)} images")
+                
+                # Save download results
+                if successful_downloads:
+                    download_df = pd.DataFrame(successful_downloads)
+                    download_df.to_csv('data/download_results.csv', index=False)
+                    print("Download results saved to 'data/download_results.csv'")
+            else:
+                print("No dataset to download images for")
         else:
             print("No objects found to process")
             
