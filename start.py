@@ -1,5 +1,7 @@
 from pathlib import Path
 import pandas as pd
+import met_download
+
 pd.set_option("display.max_columns", None)
 #pd.set_option("low_memory",False)
 
