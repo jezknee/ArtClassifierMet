@@ -13,6 +13,7 @@ import cv2
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import urllib3
+import random
 
 # Disable SSL warnings if needed
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -74,7 +75,7 @@ def get_all_objects():
         'Connection': 'keep-alive'
     }
     
-    time.sleep(0.05)  # Increased delay
+    time.sleep(0.1)  # Increased delay
     
     try:
         response = get_with_retry(session, f"{BASE_URL}/objects", headers=headers)
@@ -94,7 +95,7 @@ def get_object_details(object_id):
         'Connection': 'keep-alive'
     }
 
-    time.sleep(0.05)  # Increased delay
+    time.sleep(0.1)  # Increased delay
     
     try:
         response = get_with_retry(session, f"{BASE_URL}/objects/{object_id}", headers=headers)
@@ -122,7 +123,7 @@ def filter_objects_for_ml(sample_size=10, only_open_access=True):
         'Connection': 'keep-alive'
     }
     
-    time.sleep(0.05)
+    time.sleep(0.1)
     
     try:
         response = get_with_retry(session, f"{BASE_URL}/search", headers=headers, params=search_params)
@@ -140,6 +141,13 @@ def filter_objects_for_ml(sample_size=10, only_open_access=True):
 
 def download_and_process_image(object_data, target_size=(224, 224)):
     """Download and preprocess image for ML"""
+    USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    # Add more if needed
+    ]
+    
     # Handle both dictionary and DataFrame row inputs
     if hasattr(object_data, 'to_dict'):
         object_data = object_data.to_dict()
@@ -156,7 +164,7 @@ def download_and_process_image(object_data, target_size=(224, 224)):
     
     # Enhanced headers to mimic a real browser and avoid 403 errors
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': random.choice(USER_AGENTS),
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'gzip, deflate, br',
@@ -177,7 +185,7 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         print(f"Image URL: {image_url}")
         
         # Add delay before download to be respectful
-        time.sleep(0.5)
+        time.sleep(0.1)
         
         # Download image with retry logic
         response = get_with_retry(session, image_url, headers=headers)
@@ -283,7 +291,7 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
                 
                 # Filter by public domain status if requested
                 if only_public_domain and not is_public_domain:
-                    print(f"  ✗ Skipped (not public domain): {obj_data.get('title', 'Untitled')}")
+                    print(f"Skipped (not public domain): {obj_data.get('title', 'Untitled')}")
                     continue
                 
                 metadata_list.append({
@@ -306,7 +314,7 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
                 print(f"Skipped (classification: {classification})")
         
         # More conservative rate limiting
-        time.sleep(0.05)
+        time.sleep(0.1)
     
     if metadata_list:
         df = pd.DataFrame(metadata_list)
@@ -323,7 +331,7 @@ if __name__ == "__main__":
     # Test with small sample
     try:
         print("Filtering objects...")
-        filtered_ids = filter_objects_for_ml(sample_size=20, only_open_access=True)  # Increased sample size
+        filtered_ids = filter_objects_for_ml(sample_size=10000, only_open_access=True)  # Increased sample size
         print(f"Found {len(filtered_ids)} objects")
         
         if len(filtered_ids) > 0:
