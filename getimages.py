@@ -1,4 +1,7 @@
 import requests
+import ssl
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 import os
 from PIL import Image
@@ -9,14 +12,48 @@ import time
 # Base API URL
 BASE_URL = "https://collectionapi.metmuseum.org/public/collection/v1"
 
+def create_session_with_retries():
+    
+    session = requests.Session()
+    
+    retry_strategy = Retry(
+        total=3,
+        status_forcelist=[429, 500, 502, 503, 504],
+        backoff_factor=1
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    return session
+
 # Get all object IDs
 def get_all_objects():
-    response = requests.get(f"{BASE_URL}/objects")
+    session = create_session_with_retries()
+
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive'
+    }
+    time.sleep(0.015)
+    response = session.get(f"{BASE_URL}/objects", headers=headers, timeout=30)
     return response.json()['objectIDs']
 
 # Get object details with image URLs
 def get_object_details(object_id):
-    response = requests.get(f"{BASE_URL}/objects/{object_id}")
+    session = create_session_with_retries()
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive'
+    }
+
+    time.sleep(0.015)
+    response = session.get(f"{BASE_URL}/objects/{object_id}", headers=headers, timeout=30)
     return response.json()
 
 # Filter for objects with images and specific criteria
@@ -26,8 +63,15 @@ def filter_objects_for_ml(sample_size=10):
         'hasImages': 'true',
         'q': '*',  # Get all
     }
-    
-    response = requests.get(f"{BASE_URL}/search", params=search_params)
+    time.sleep(0.015)
+    session = create_session_with_retries()
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive'
+    }
+    response = session.get(f"{BASE_URL}/search", params=search_params, headers=headers, timeout=30)
     object_ids = response.json()['objectIDs']
     
     # Sample if needed
@@ -50,7 +94,7 @@ def download_and_process_image(object_data, target_size=(224, 224)):
     
     try:
         # Download image
-        response = requests.get(image_url, timeout=30)
+        response = session.get(image_url, timeout=30)
         response.raise_for_status()
         
         # Save raw image
@@ -66,7 +110,7 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         processed_image = cv2.resize(image_rgb, target_size)
         
         # Save processed image
-        processed_path = f"data/images/processed/{object_id}.jpg"
+        processed_path = f"Data/Images/Processed/{object_id}.jpg"
         cv2.imwrite(processed_path, cv2.cvtColor(processed_image, cv2.COLOR_RGB2BGR))
         
         return {
