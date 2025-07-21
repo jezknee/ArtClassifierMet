@@ -104,11 +104,15 @@ def get_object_details(object_id):
         return {}
 
 # Filter for objects with images and specific criteria
-def filter_objects_for_ml(sample_size=10):
+def filter_objects_for_ml(sample_size=10, only_open_access=True):
     search_params = {
         'hasImages': 'true',
         'q': 'Paintings',  # Search for paintings specifically
     }
+    
+    # Add Open Access filter to get only public domain images
+    if only_open_access:
+        search_params['isOnView'] = 'true'  # Often correlates with open access
     
     session = create_session_with_retries()
     headers = {
@@ -253,7 +257,7 @@ def download_images_sequential(dataset_df):
     
     return successful_downloads
 
-def create_ml_dataset(filtered_object_ids, target_classification="Paintings"):
+def create_ml_dataset(filtered_object_ids, target_classification="Paintings", only_public_domain=True):
     # Create data directory
     os.makedirs('data', exist_ok=True)
     
@@ -261,6 +265,8 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings"):
     metadata_list = []
     
     print(f"Processing {len(filtered_object_ids)} objects, filtering for classification: {target_classification}...")
+    if only_public_domain:
+        print("Only including public domain (Open Access) artworks...")
     
     for i, object_id in enumerate(filtered_object_ids):
         print(f"Processing object {i+1}/{len(filtered_object_ids)}: {object_id}")
@@ -270,20 +276,32 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings"):
         # Check if object has image AND matches classification
         if obj_data.get('primaryImage'):  # Has image
             classification = obj_data.get('classification', 'Unknown')
+            is_public_domain = obj_data.get('isPublicDomain', False)
             
             # Filter by classification (case-insensitive)
             if target_classification.lower() in classification.lower():
+                
+                # Filter by public domain status if requested
+                if only_public_domain and not is_public_domain:
+                    print(f"  ✗ Skipped (not public domain): {obj_data.get('title', 'Untitled')}")
+                    continue
+                
                 metadata_list.append({
                     'object_id': obj_data['objectID'],
+                    'title': obj_data.get('title', 'Untitled'),
                     'department': obj_data.get('department', 'Unknown'),
                     'object_name': obj_data.get('objectName', 'Unknown'),
                     'culture': obj_data.get('culture', 'Unknown'),
                     'period': obj_data.get('period', 'Unknown'),
                     'medium': obj_data.get('medium', 'Unknown'),
                     'classification': classification,
-                    'image_url': obj_data['primaryImage']
+                    'is_public_domain': is_public_domain,
+                    'image_url': obj_data['primaryImage'],
+                    'object_date': obj_data.get('objectDate', 'Unknown'),
+                    'artist_display_name': obj_data.get('artistDisplayName', 'Unknown')
                 })
-                print(f"Added painting: {obj_data.get('title', 'Untitled')} ({classification})")
+                domain_status = "Public Domain" if is_public_domain else "Rights Reserved"
+                print(f"Added painting: {obj_data.get('title', 'Untitled')} ({domain_status})")
             else:
                 print(f"Skipped (classification: {classification})")
         
@@ -293,7 +311,8 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings"):
     if metadata_list:
         df = pd.DataFrame(metadata_list)
         df.to_csv('data/metadata.csv', index=False)
-        print(f"\nSaved metadata for {len(metadata_list)} paintings (filtered from {len(filtered_object_ids)} total objects)")
+        public_domain_count = df['is_public_domain'].sum() if only_public_domain else len(df)
+        print(f"\nSaved metadata for {len(metadata_list)} paintings ({public_domain_count} public domain)")
         return df
     else:
         print("No paintings with images found")
@@ -304,12 +323,12 @@ if __name__ == "__main__":
     # Test with small sample
     try:
         print("Filtering objects...")
-        filtered_ids = filter_objects_for_ml(sample_size=5000)
+        filtered_ids = filter_objects_for_ml(sample_size=20, only_open_access=True)  # Increased sample size
         print(f"Found {len(filtered_ids)} objects")
         
         if len(filtered_ids) > 0:
             print("Creating dataset...")
-            dataset = create_ml_dataset(filtered_ids, target_classification="Paintings")
+            dataset = create_ml_dataset(filtered_ids, target_classification="Paintings", only_public_domain=True)
             print(dataset.head())
             print("Dataset creation complete!")
             
