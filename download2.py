@@ -253,6 +253,19 @@ def download_and_process_image(object_data, target_size=(224, 224)):
         print(f"Error processing {object_id}: {e}")
         return {'object_id': object_id, 'success': False, 'error': str(e)}
 
+def update_metadata(new_data, metadata_file='data/metadata.csv'):
+    """Update metadata file with new entries"""
+    if os.path.exists(metadata_file):
+        existing_df = pd.read_csv(metadata_file)
+        # Append new data and remove duplicates based on object_id
+        updated_df = pd.concat([existing_df, pd.DataFrame([new_data])], ignore_index=True)
+        updated_df = updated_df.drop_duplicates(subset='object_id', keep='last')
+    else:
+        updated_df = pd.DataFrame([new_data])
+    
+    updated_df.to_csv(metadata_file, index=False)
+    return updated_df
+
 # Parallel downloading with reduced workers to avoid overwhelming the server
 def download_images_parallel(object_data_list, max_workers=3):
     """Download images in parallel with conservative threading"""
@@ -293,6 +306,15 @@ def download_images_sequential(dataset_df):
         
         if result['success']:
             successful_downloads.append(result)
+            # Update metadata immediately after successful download
+            metadata_entry = row.to_dict()
+            metadata_entry.update({
+                'processed_path': result['processed_path'],
+                'raw_path': result['raw_path'],
+                'download_date': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+            })
+            update_metadata(metadata_entry)
+            print(f"Updated metadata for object {object_id}")
         else:
             failed_downloads.append(result)
         
@@ -308,6 +330,11 @@ def download_images_sequential(dataset_df):
         print("Failed downloads:")
         for failed in failed_downloads:
             print(f"  Object {failed['object_id']}: {failed.get('error', 'Unknown error')}")
+
+        # Save failed downloads log
+        failed_df = pd.DataFrame(failed_downloads)
+        failed_df.to_csv('data/failed_downloads.csv', index=False)
+        print("\nFailed downloads saved to 'data/failed_downloads.csv'")
     
     return successful_downloads
 
