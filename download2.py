@@ -406,7 +406,7 @@ if __name__ == "__main__":
     # Test with small sample
     try:
         print("Filtering objects...")
-        filtered_ids = filter_objects_for_ml(sample_size=10000, only_open_access=True)  # Increased sample size
+        filtered_ids = filter_objects_for_ml(sample_size=500000, only_open_access=True)  # Increased sample size
         print(f"Found {len(filtered_ids)} objects")
         
         if len(filtered_ids) > 0:
