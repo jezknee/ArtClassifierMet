@@ -121,15 +121,15 @@ def get_object_details(object_id):
         return {}
 
 # Filter for objects with images and specific criteria
-def filter_objects_for_ml(sample_size=10, only_open_access=True):
+def filter_objects_for_ml(sample_size=500000, only_open_access=True):
     search_params = {
         'hasImages': 'true',
         'q': 'Paintings',  # Search for paintings specifically
     }
     
     # Add Open Access filter to get only public domain images
-    if only_open_access:
-        search_params['isOnView'] = 'true'  # Often correlates with open access
+    #if only_open_access:
+    #    search_params['isOnView'] = 'true'  # Often correlates with open access
     
     session = create_session_with_retries()
     headers = {
@@ -345,6 +345,8 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
     os.makedirs('data', exist_ok=True)
         # Load existing metadata if available
     metadata_file = 'data/metadata.csv'
+    existing_downloads = get_existing_downloads()
+
     if os.path.exists(metadata_file):
         existing_df = pd.read_csv(metadata_file)
         print(f"Loaded {len(existing_df)} existing metadata entries")
@@ -353,8 +355,14 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
     else:
         existing_df = pd.DataFrame()
         existing_ids = set()
-    
-    # Collect new metadata
+
+    # Filter out already downloaded objects upfront
+    filtered_object_ids = [obj_id for obj_id in filtered_object_ids if obj_id not in existing_ids and obj_id not in existing_downloads]
+    print(f"Filtered down to {len(filtered_object_ids)} new objects to process...")
+    if len(filtered_object_ids) == 0:
+        print("No new objects to process!")
+        return existing_df
+        # Collect new metadata
     new_metadata = []
     
     print(f"Processing {len(filtered_object_ids)} objects, filtering for classification: {target_classification}...")
