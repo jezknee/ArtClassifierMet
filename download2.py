@@ -288,9 +288,15 @@ def download_images_sequential(dataset_df):
     existing_downloads = get_existing_downloads()
     print(f"Found {len(existing_downloads)} existing downloads")
     
-    successful_downloads = []
-    failed_downloads = []
-    skipped_downloads = []
+    # Track counts instead of keeping lists in memory
+    successful_count = 0
+    failed_count = 0
+    skipped_count = 0
+    
+    # Create failed downloads file if needed
+    failed_log_path = 'data/failed_downloads.csv'
+    if not os.path.exists('data'):
+        os.makedirs('data')
     
     for idx, row in dataset_df.iterrows():
         object_id = row['object_id']
@@ -298,14 +304,14 @@ def download_images_sequential(dataset_df):
         # Skip if already downloaded
         if object_id in existing_downloads:
             print(f"Skipping image {idx + 1}/{len(dataset_df)} (already downloaded)")
-            skipped_downloads.append(object_id)
+            skipped_count += 1
             continue
 
         print(f"Processing image {idx + 1}/{len(dataset_df)}")
         result = download_and_process_image(row)
         
         if result['success']:
-            successful_downloads.append(result)
+            successful_count += 1
             # Update metadata immediately after successful download
             metadata_entry = row.to_dict()
             metadata_entry.update({
@@ -316,40 +322,51 @@ def download_images_sequential(dataset_df):
             update_metadata(metadata_entry)
             print(f"Updated metadata for object {object_id}")
         else:
-            failed_downloads.append(result)
+            failed_count += 1
+            # Log failed download immediately
+            failed_df = pd.DataFrame([result])
+            failed_df.to_csv(failed_log_path, mode='a', header=not os.path.exists(failed_log_path), index=False)
         
-        # Rate limiting between downloads - increased delay
-        time.sleep(1.0)  # Increased from 0.1 to 1 second
+        # Rate limiting between downloads
+        time.sleep(1.0)
     
     print(f"\nDownload complete:")
-    print(f"- {len(successful_downloads)} successful")
-    print(f"- {len(failed_downloads)} failed")
-    print(f"- {len(skipped_downloads)} skipped (already downloaded)")
+    print(f"- {successful_count} successful")
+    print(f"- {failed_count} failed")
+    print(f"- {skipped_count} skipped (already downloaded)")
     
-    if failed_downloads:
-        print("Failed downloads:")
-        for failed in failed_downloads:
-            print(f"  Object {failed['object_id']}: {failed.get('error', 'Unknown error')}")
-
-        # Save failed downloads log
-        failed_df = pd.DataFrame(failed_downloads)
-        failed_df.to_csv('data/failed_downloads.csv', index=False)
-        print("\nFailed downloads saved to 'data/failed_downloads.csv'")
+    if failed_count > 0:
+        print("\nFailed downloads have been logged to 'data/failed_downloads.csv'")
     
-    return successful_downloads
+    return successful_count
 
 def create_ml_dataset(filtered_object_ids, target_classification="Paintings", only_public_domain=True):
     # Create data directory
     os.makedirs('data', exist_ok=True)
+        # Load existing metadata if available
+    metadata_file = 'data/metadata.csv'
+    if os.path.exists(metadata_file):
+        existing_df = pd.read_csv(metadata_file)
+        print(f"Loaded {len(existing_df)} existing metadata entries")
+        # Convert existing object IDs to set for faster lookup
+        existing_ids = set(existing_df['object_id'])
+    else:
+        existing_df = pd.DataFrame()
+        existing_ids = set()
     
-    # Collect metadata
-    metadata_list = []
+    # Collect new metadata
+    new_metadata = []
     
     print(f"Processing {len(filtered_object_ids)} objects, filtering for classification: {target_classification}...")
+    
     if only_public_domain:
         print("Only including public domain (Open Access) artworks...")
     
     for i, object_id in enumerate(filtered_object_ids):
+        # Skip if we already have metadata for this object
+        if object_id in existing_ids:
+            print(f"Skipping metadata for object {object_id} (already exists)")
+            continue
         print(f"Processing object {i+1}/{len(filtered_object_ids)}: {object_id}")
         
         obj_data = get_object_details(object_id)
@@ -367,7 +384,7 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
                     print(f"Skipped (not public domain): {obj_data.get('title', 'Untitled')}")
                     continue
                 
-                metadata_list.append({
+                new_metadata.append({
                     'object_id': obj_data['objectID'],
                     'title': obj_data.get('title', 'Untitled'),
                     'department': obj_data.get('department', 'Unknown'),
@@ -391,22 +408,34 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
         # More conservative rate limiting
         time.sleep(0.1)
     
-    if metadata_list:
-        df = pd.DataFrame(metadata_list)
-        df.to_csv('data/metadata.csv', index=False)
-        public_domain_count = df['is_public_domain'].sum() if only_public_domain else len(df)
-        print(f"\nSaved metadata for {len(metadata_list)} paintings ({public_domain_count} public domain)")
-        return df
+    if new_metadata:
+        new_df = pd.DataFrame(new_metadata)
+
+        # Combine with existing metadata
+        if not existing_df.empty:
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+            # Remove any duplicates, keeping the newest entry
+            combined_df = combined_df.drop_duplicates(subset='object_id', keep='last')
+        else:
+            combined_df = new_df
+        # Save combined metadata
+        combined_df.to_csv('data/metadata.csv', index=False)
+        public_domain_count = combined_df['is_public_domain'].sum() if only_public_domain else len(df)
+        print(f"\nSaved metadata for {len(combined_df)} paintings ({public_domain_count} public domain)")
+        return combined_df
     else:
-        print("No paintings with images found")
-        return pd.DataFrame()
+        if not existing_df.empty:
+            print("No new paintings found, keeping existing metadata")
+            return existing_df
+        else:
+            print("No paintings with images found")
+            return pd.DataFrame()
 
 # Example usage
 if __name__ == "__main__":
-    # Test with small sample
     try:
         print("Filtering objects...")
-        filtered_ids = filter_objects_for_ml(sample_size=500000, only_open_access=True)  # Increased sample size
+        filtered_ids = filter_objects_for_ml(sample_size=500000, only_open_access=True)
         print(f"Found {len(filtered_ids)} objects")
         
         if len(filtered_ids) > 0:
@@ -423,16 +452,10 @@ if __name__ == "__main__":
                 
                 if use_parallel:
                     successful_downloads = download_images_parallel(dataset.to_dict('records'))
+                    print(f"\nImage download complete! Successfully downloaded {len(successful_downloads)} images")
                 else:
-                    successful_downloads = download_images_sequential(dataset)
-                
-                print(f"\nImage download complete! Successfully downloaded {len(successful_downloads)} images")
-                
-                # Save download results
-                if successful_downloads:
-                    download_df = pd.DataFrame(successful_downloads)
-                    download_df.to_csv('data/download_results.csv', index=False)
-                    print("Download results saved to 'data/download_results.csv'")
+                    successful_count = download_images_sequential(dataset)
+                    print(f"\nImage download complete! Successfully downloaded {successful_count} images")
             else:
                 print("No dataset to download images for")
         else:
