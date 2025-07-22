@@ -439,31 +439,24 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
             print("No paintings with images found")
             return pd.DataFrame()
 
-# Example usage
 if __name__ == "__main__":
     try:
         print("Filtering objects...")
-        filtered_ids = filter_objects_for_ml(sample_size=500000, only_open_access=True)
-        print(f"Found {len(filtered_ids)} objects")
+        all_filtered_ids = filter_objects_for_ml(sample_size=500000, only_open_access=True)
+        print(f"Found {len(all_filtered_ids)} total objects")
         
-        if len(filtered_ids) > 0:
-            print("Creating dataset...")
-            dataset = create_ml_dataset(filtered_ids, target_classification="Paintings", only_public_domain=True)
-            print(dataset.head())
-            print("Dataset creation complete!")
+        if len(all_filtered_ids) > 0:
+            print("Creating dataset (filtering out existing downloads)...")
+            dataset = create_ml_dataset(all_filtered_ids, target_classification="Paintings", only_public_domain=True)
             
             if not dataset.empty:
-                print("\nDownloading images...")
-                
-                # Choose download method (sequential is more stable)
-                use_parallel = False  # Set to True for parallel downloads
-                
-                if use_parallel:
-                    successful_downloads = download_images_parallel(dataset.to_dict('records'))
-                    print(f"\nImage download complete! Successfully downloaded {len(successful_downloads)} images")
+                new_items = dataset[~dataset['object_id'].isin(get_existing_downloads())]
+                if len(new_items) > 0:
+                    print(f"\nDownloading {len(new_items)} new images...")
+                    successful_count = download_images_sequential(new_items)
+                    print(f"\nImage download complete! Successfully downloaded {successful_count} new images")
                 else:
-                    successful_count = download_images_sequential(dataset)
-                    print(f"\nImage download complete! Successfully downloaded {successful_count} images")
+                    print("No new images to download!")
             else:
                 print("No dataset to download images for")
         else:
