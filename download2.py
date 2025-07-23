@@ -121,43 +121,52 @@ def get_object_details(object_id):
         return {}
 
 # Filter for objects with images and specific criteria
-def filter_objects_for_ml(sample_size=500, only_open_access=True, existing_ids =None):
-    search_params = {
-        'hasImages': 'true',
-        'q': 'Paintings',  # Search for paintings specifically
-    }
+def filter_objects_for_ml(sample_size=500000, only_open_access=True, existing_ids=None):
+    """Get painting objects using local metadata file first"""
+    print("Loading full metadata file...")
+    full_metadata_df = get_large_metadata_file()
     
-    session = create_session_with_retries()
-    headers = {
-        'User-Agent': 'MetMuseum-ML-Dataset/1.0',
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive'
-    }
+    # Filter for paintings in the metadata
+    paintings_df = full_metadata_df[
+        (full_metadata_df['Classification'].str.lower().str.contains('painting', na=False)) |
+        (full_metadata_df['Object Name'].str.lower().str.contains('painting', na=False))
+    ]
     
-    time.sleep(0.1)
+    print(f"Found {len(paintings_df)} paintings in metadata file")
+    """
+    # Get object IDs that have images
+    paintings_with_images = paintings_df[paintings_df['PrimaryImageURL'].notna() & 
+                                      (paintings_df['PrimaryImageURL'] != '')]
     
-    try:
-        response = get_with_retry(session, f"{BASE_URL}/search", headers=headers, params=search_params)
-        data = response.json()
-        object_ids = data.get('objectIDs', [])
+    print(f"Found {len(paintings_with_images)} paintings with images")
+    """
+    # Convert to list of object IDs
+    object_ids = paintings_df['Object ID'].tolist()
+    
+    # Filter out existing IDs
+    if existing_ids:
+        object_ids = [obj_id for obj_id in object_ids if obj_id not in existing_ids]
+        print(f"Filtered to {len(object_ids)} new objects")
+    
+    # Sample if needed
+    if len(object_ids) > sample_size:
+        object_ids = np.random.choice(object_ids, sample_size, replace=False)
+        print(f"Sampled {len(object_ids)} objects for processing")
+    
+    return object_ids
+    
+def get_large_metadata_file():
+    from pathlib import Path
+    import pandas as pd
 
-        print(f"Found {len(object_ids)} total objects with images")
-        
-        # Filter out existing IDs before sampling
-        if existing_ids:
-            object_ids = [obj_id for obj_id in object_ids if obj_id not in existing_ids]
-            print(f"Filtered to {len(object_ids)} new objects")
-        
-        # Sample if needed
-        if len(object_ids) > sample_size:
-            object_ids = np.random.choice(object_ids, sample_size, replace=False)
-            print(f"Sampled {len(object_ids)} objects for processing")
-        
-        return object_ids
-    except Exception as e:
-        print(f"Error filtering objects: {e}")
-        return []
+    pd.set_option("display.max_columns", None)
+    #pd.set_option("low_memory",False)
+
+    path = Path.cwd() / "Data" / "MetObjects.txt"
+    print(path)
+    metadata = []
+    df = pd.read_csv(path, encoding="utf-8")
+    return df
 
 def get_existing_downloads():
     """Get set of object IDs that have already been downloaded"""
@@ -432,8 +441,8 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
             combined_df = new_df
         # Save combined metadata
         combined_df.to_csv('data/metadata.csv', index=False)
-        public_domain_count = combined_df['is_public_domain'].sum() if only_public_domain else len(df)
-        print(f"\nSaved metadata for {len(combined_df)} paintings ({public_domain_count} public domain)")
+        #public_domain_count = combined_df['is_public_domain'].sum() if only_public_domain else len(df)
+        #print(f"\nSaved metadata for {len(combined_df)} paintings ({public_domain_count} public domain)")
         return combined_df
     else:
         if not existing_df.empty:
@@ -462,7 +471,7 @@ if __name__ == "__main__":
         
         print("Filtering objects (excluding existing)...")
         all_filtered_ids = filter_objects_for_ml(
-            sample_size=500, 
+            sample_size=500000, 
             only_open_access=True,
             existing_ids=all_existing_ids
         )
