@@ -9,4 +9,4 @@ print(path)
 metadata = []
 df = pd.read_csv(path, encoding="utf-8")
 print(df.head())
-df.to_csv(df, path, index=False)
+df.to_csv(Path.cwd() / "Data" / "MetObj.csv", index=False)
