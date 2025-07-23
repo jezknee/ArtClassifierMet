@@ -1,6 +1,5 @@
 from pathlib import Path
 import pandas as pd
-import met_download
 
 pd.set_option("display.max_columns", None)
 #pd.set_option("low_memory",False)
@@ -10,3 +9,4 @@ print(path)
 metadata = []
 df = pd.read_csv(path, encoding="utf-8")
 print(df.head())
+df.to_csv(df, path, index=False)

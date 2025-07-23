@@ -121,15 +121,11 @@ def get_object_details(object_id):
         return {}
 
 # Filter for objects with images and specific criteria
-def filter_objects_for_ml(sample_size=500000, only_open_access=True):
+def filter_objects_for_ml(sample_size=500, only_open_access=True, existing_ids =None):
     search_params = {
         'hasImages': 'true',
         'q': 'Paintings',  # Search for paintings specifically
     }
-    
-    # Add Open Access filter to get only public domain images
-    #if only_open_access:
-    #    search_params['isOnView'] = 'true'  # Often correlates with open access
     
     session = create_session_with_retries()
     headers = {
@@ -145,10 +141,18 @@ def filter_objects_for_ml(sample_size=500000, only_open_access=True):
         response = get_with_retry(session, f"{BASE_URL}/search", headers=headers, params=search_params)
         data = response.json()
         object_ids = data.get('objectIDs', [])
+
+        print(f"Found {len(object_ids)} total objects with images")
+        
+        # Filter out existing IDs before sampling
+        if existing_ids:
+            object_ids = [obj_id for obj_id in object_ids if obj_id not in existing_ids]
+            print(f"Filtered to {len(object_ids)} new objects")
         
         # Sample if needed
         if len(object_ids) > sample_size:
             object_ids = np.random.choice(object_ids, sample_size, replace=False)
+            print(f"Sampled {len(object_ids)} objects for processing")
         
         return object_ids
     except Exception as e:
@@ -298,7 +302,7 @@ def download_images_sequential(dataset_df):
     if not os.path.exists('data'):
         os.makedirs('data')
     
-    for idx, row in dataset_df.iterrows():
+    for count, (idx, row) in enumerate(dataset_df.iterrows(), 1):
         object_id = row['object_id']
         
         # Skip if already downloaded
@@ -307,7 +311,7 @@ def download_images_sequential(dataset_df):
             skipped_count += 1
             continue
 
-        print(f"Processing image {idx + 1}/{len(dataset_df)}")
+        print(f"Processing image {count}/{len(dataset_df)}")
         result = download_and_process_image(row)
         
         if result['success']:
@@ -340,7 +344,7 @@ def download_images_sequential(dataset_df):
     
     return successful_count
 
-def create_ml_dataset(filtered_object_ids, target_classification="Paintings", only_public_domain=True):
+def create_ml_dataset(filtered_object_ids, target_classification="Paintings", only_public_domain=False):
     # Create data directory
     os.makedirs('data', exist_ok=True)
         # Load existing metadata if available
@@ -441,26 +445,41 @@ def create_ml_dataset(filtered_object_ids, target_classification="Paintings", on
 
 if __name__ == "__main__":
     try:
-        print("Filtering objects...")
-        all_filtered_ids = filter_objects_for_ml(sample_size=500000, only_open_access=True)
-        print(f"Found {len(all_filtered_ids)} total objects")
+        # Load existing data first
+        metadata_file = 'data/metadata.csv'
+        existing_downloads = get_existing_downloads()
+        
+        if os.path.exists(metadata_file):
+            existing_df = pd.read_csv(metadata_file)
+            existing_ids = set(existing_df['object_id'])
+        else:
+            existing_df = pd.DataFrame()
+            existing_ids = set()
+            
+        # Combine both existing metadata and downloads
+        all_existing_ids = existing_ids.union(existing_downloads)
+        print(f"Found {len(all_existing_ids)} total existing processed objects")
+        
+        print("Filtering objects (excluding existing)...")
+        all_filtered_ids = filter_objects_for_ml(
+            sample_size=500, 
+            only_open_access=True,
+            existing_ids=all_existing_ids
+        )
+        print(f"Found {len(all_filtered_ids)} new objects to process")
         
         if len(all_filtered_ids) > 0:
-            print("Creating dataset (filtering out existing downloads)...")
+            print("Creating dataset...")
             dataset = create_ml_dataset(all_filtered_ids, target_classification="Paintings", only_public_domain=True)
             
             if not dataset.empty:
-                new_items = dataset[~dataset['object_id'].isin(get_existing_downloads())]
-                if len(new_items) > 0:
-                    print(f"\nDownloading {len(new_items)} new images...")
-                    successful_count = download_images_sequential(new_items)
-                    print(f"\nImage download complete! Successfully downloaded {successful_count} new images")
-                else:
-                    print("No new images to download!")
+                print(f"\nDownloading {len(dataset)} new images...")
+                successful_count = download_images_sequential(dataset)
+                print(f"\nImage download complete! Successfully downloaded {successful_count} new images")
             else:
-                print("No dataset to download images for")
+                print("No new images found to download")
         else:
-            print("No objects found to process")
+            print("No new objects found to process")
             
     except Exception as e:
         print(f"Script failed with error: {e}")
