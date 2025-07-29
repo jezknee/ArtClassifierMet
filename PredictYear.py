@@ -41,11 +41,16 @@ def create_colour_df(filename):
 all_path = Path.cwd() / "Data" / "Images" / "Raw"
 png_files = sorted(all_path.glob('*.jpg'))
 #print(png_files)
-all_images_df = pd.DataFrame(columns=['Colour', 'Count', 'Percentage', 'Filename'   ])
+all_images_df = pd.DataFrame(columns=['Colour', 'Count', 'Percentage', 'Filename'])
+total_images = len(png_files)
+print(f"Total images found: {total_images}")
+processed_count = 0
 for i in png_files:
     filename = str(all_path) + "\\" + i.name
+    print(f"Processing {i.name} ({processed_count + 1}/{total_images})")
     create_colour_df(filename)
     all_images_df = pd.concat([all_images_df, create_colour_df(filename)], ignore_index=True)
+    processed_count += 1
 
 print(all_images_df.head())
 all_images_df.to_csv(Path.cwd() / "Data" / "ImageColours.csv", index=False)
