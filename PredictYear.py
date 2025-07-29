@@ -18,9 +18,14 @@ def create_colour_df(filename):
         for y in range(rgb_im.height):
             # Get the RGB values of the pixel at (x, y)
             rgb = rgb_im.getpixel((x, y))
-            color_name = webcolors.rgb_to_name(rgb)
-            #print(r, g, b)
-            colour_dictionary[color_name] = colour_dictionary.get(color_name, 0) + 1
+            try:
+                color_name = webcolors.rgb_to_name(rgb)
+                #print(r, g, b)
+                colour_dictionary[color_name] = colour_dictionary.get(color_name, 0) + 1
+            except ValueError:
+                color_name = "unknown"
+                # If the color is not found, you can choose to ignore it or handle it
+                pass
 
     # Create a DataFrame from the colour dictionary
     df = pd.DataFrame(list(colour_dictionary.items()), columns=['Colour', 'Count'])
@@ -28,15 +33,19 @@ def create_colour_df(filename):
     df['Filename'] = filename
 
     # Print the DataFrame
-    print(df.head())
+    #print(df.head())
     return df
 
 
 
-all_path = Path.cwd() / "Data" / "Images" / "Processed"
+all_path = Path.cwd() / "Data" / "Images" / "Raw"
 png_files = sorted(all_path.glob('*.jpg'))
 #print(png_files)
-
+all_images_df = pd.DataFrame(columns=['Colour', 'Count', 'Percentage', 'Filename'   ])
 for i in png_files:
-    filename = i.name
+    filename = str(all_path) + "\\" + i.name
     create_colour_df(filename)
+    all_images_df = pd.concat([all_images_df, create_colour_df(filename)], ignore_index=True)
+
+print(all_images_df.head())
+all_images_df.to_csv(Path.cwd() / "Data" / "ImageColours.csv", index=False)
