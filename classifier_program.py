@@ -1,5 +1,22 @@
 from pathlib import Path 
 import pandas as pd
+from sklearn.model_selection import cross_val_score 
+from sklearn.metrics import classification_report 
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+
+from pandas import read_csv 
+from matplotlib import pyplot 
+from sklearn.model_selection import KFold 
+from sklearn.model_selection import cross_val_score 
+from sklearn.linear_model import LogisticRegression 
+from sklearn.tree import DecisionTreeClassifier 
+from sklearn.neighbors import KNeighborsClassifier 
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis 
+from sklearn.naive_bayes import GaussianNB 
+from sklearn.svm import SVC
 
 pd.set_option("display.max_columns", None)
 
@@ -19,7 +36,7 @@ metadata_df["Object ID"] = metadata_df["Object ID"].astype(str)
 image_data_df["Object ID"] = image_data_df["Object ID"].astype(str)
 
 # Merge the two DataFrames on 'Object ID'
-merged_df = pd.merge(metadata_df, image_data_df, how="left", left_on="Object ID", right_on="Object ID")
+merged_df = pd.merge(image_data_df, metadata_df, how="left", left_on="Object ID", right_on="Object ID").fillna(0)
 """
 # Check which columns contain Unicode characters
 for col in merged_df.columns:
@@ -29,4 +46,42 @@ for col in merged_df.columns:
         print(f"Unicode characters found in column: {col}")
 """
 print(merged_df.head())
-#a = merged_df.head().to_string().encode('utf-8', errors='replace').decode('utf-8')
+merged_df[merged_df["Century"]] = merged_df["Object Begin Date"].apply(lambda x: "21st Century" if x >= 2000 else "20th Century" if x >= 1900 else "19th Century" if x >= 1800 else "18th Century" if x >= 1700 else "17th Century" if x >= 1600 else "16th Century" if x >= 1500 else "15th Century" if x >= 1400 else "14th Century" if x >= 1300 else "13th Century" if x >= 1200 else "12th Century" if x >= 1100 else "11th Century" if x >= 1000 else "10th Century" if x >= 900 else "9th Century" if x >= 800 else "8th Century" if x >= 700 else "7th Century" if x >= 600 else "6th Century" if x >= 500 else "5th Century" if x >= 400 else "4th Century" if x >= 300 else "3rd Century" if x >= 200 else "2nd Century" if x >= 100 else "1st Century" if x >= 0 else "BC" if x < 0 else "Unknown")
+
+
+for c in merged_df.columns:
+    print("----")
+    print(merged_df[c].value_counts())
+"""
+names = merged_df.columns.tolist()
+array = merged_df.values
+X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
+Y = array[:, -1]    # Target variable (last column, 'Century')
+
+models = [] 
+models.append(('LR', LogisticRegression(solver='liblinear'))) 
+models.append(('LDA', LinearDiscriminantAnalysis())) 
+models.append(('KNN', KNeighborsClassifier())) 
+models.append(('CART', DecisionTreeClassifier())) 
+models.append(('NB', GaussianNB())) 
+models.append(('SVM', SVC())) 
+# evaluate each model in turn 
+results = [] 
+names = [] 
+scoring = 'accuracy' 
+for name, model in models: 
+    kfold = KFold(n_splits=10, random_state=7,shuffle=True) 
+    cv_results = cross_val_score(model, X, Y, cv=kfold, scoring=scoring) 
+    results.append(cv_results) 
+    names.append(name) 
+    msg = "%s: %f (%f)" % (name, cv_results.mean(), cv_results.std()) 
+    print(msg) 
+
+# boxplot algorithm comparison 
+fig = pyplot.figure()  
+fig.suptitle('Algorithm Comparison')  
+ax = fig.add_subplot(111)  
+pyplot.boxplot(results)  
+ax.set_xticklabels(names)  
+pyplot.show()
+"""
