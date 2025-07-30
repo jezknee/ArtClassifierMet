@@ -44,7 +44,7 @@ def create_colour_df_optimized(filename):
     return df
 
 
-def process_images_batch(image_paths, method='optimized', sample_rate=0.1):
+def process_images_batch(image_paths, method='optimized'):
     """Process all images and return combined DataFrame"""
     all_dfs = []
     total_images = len(image_paths)
