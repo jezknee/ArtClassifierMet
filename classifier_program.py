@@ -22,19 +22,19 @@ pd.set_option("display.max_columns", None)
 
 metadata = pd.read_csv(Path.cwd() / "Data" / "MetObjWithTags2.csv", encoding="utf-8")
 metadata_df = pd.DataFrame(metadata)
-print("Metadata:")
-print(metadata.columns)
-print(metadata.head())
+#print("Metadata:")
+#print(metadata.columns)
+#print(metadata.head())
 
 image_data = pd.read_csv(Path.cwd() / "Data" / "ImageColoursPivot.csv", encoding="utf-8")
 image_data_df = pd.DataFrame(image_data)
 print("Image Data:")
-print(image_data.columns)
-print(image_data.head())
+#print(image_data.columns)
+
 
 metadata_df["Object ID"] = metadata_df["Object ID"].astype(str)
-image_data_df["Object ID"] = image_data_df["Object ID"].astype(str)
-
+image_data_df["Object ID"] = image_data_df["Object ID"].astype(str).str.replace(".jpg","", regex=False)
+print(image_data_df.head())
 # Merge the two DataFrames on 'Object ID'
 merged_df = pd.merge(image_data_df, metadata_df, how="left", left_on="Object ID", right_on="Object ID").fillna(0)
 """
@@ -45,14 +45,30 @@ for col in merged_df.columns:
     except (UnicodeEncodeError, IndexError):
         print(f"Unicode characters found in column: {col}")
 """
-print(merged_df.head())
-merged_df[merged_df["Century"]] = merged_df["Object Begin Date"].apply(lambda x: "21st Century" if x >= 2000 else "20th Century" if x >= 1900 else "19th Century" if x >= 1800 else "18th Century" if x >= 1700 else "17th Century" if x >= 1600 else "16th Century" if x >= 1500 else "15th Century" if x >= 1400 else "14th Century" if x >= 1300 else "13th Century" if x >= 1200 else "12th Century" if x >= 1100 else "11th Century" if x >= 1000 else "10th Century" if x >= 900 else "9th Century" if x >= 800 else "8th Century" if x >= 700 else "7th Century" if x >= 600 else "6th Century" if x >= 500 else "5th Century" if x >= 400 else "4th Century" if x >= 300 else "3rd Century" if x >= 200 else "2nd Century" if x >= 100 else "1st Century" if x >= 0 else "BC" if x < 0 else "Unknown")
+#print(merged_df.head())
+print(merged_df.dtypes)
+merged_df["Century"] = merged_df["Object Begin Date"].apply(lambda x: "21st Century" if x >= 2000 else "20th Century" if x >= 1900 else "19th Century" if x >= 1800 else "18th Century" if x >= 1700 else "17th Century" if x >= 1600 else "16th Century" if x >= 1500 else "15th Century" if x >= 1400 else "14th Century" if x >= 1300 else "13th Century" if x >= 1200 else "12th Century" if x >= 1100 else "11th Century" if x >= 1000 else "10th Century" if x >= 900 else "9th Century" if x >= 800 else "8th Century" if x >= 700 else "7th Century" if x >= 600 else "6th Century" if x >= 500 else "5th Century" if x >= 400 else "4th Century" if x >= 300 else "3rd Century" if x >= 200 else "2nd Century" if x >= 100 else "1st Century" if x >= 0 else "BC" if x < 0 else "Unknown")
 
+merged_df = merged_df.loc[:, (merged_df != 0).any(axis=0)]
+
+
+
+print(merged_df.columns)
+
+merged_df.drop(columns=["Object Number", "Gallery Number"], inplace=True)
+
+#merged_df.to_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", index=False)
+
+# Prepare data for classification
+print("Preparing data for classification...")
+
+merged_df.drop(columns=["Department", "Object Name", "Title", "Object Begin Date", "Object End Date", "Medium", "Dimensions"], inplace=True)
 
 for c in merged_df.columns:
+    counts = merged_df[c].value_counts()
     print("----")
-    print(merged_df[c].value_counts())
-"""
+    print(counts)
+
 names = merged_df.columns.tolist()
 array = merged_df.values
 X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
@@ -84,4 +100,3 @@ ax = fig.add_subplot(111)
 pyplot.boxplot(results)  
 ax.set_xticklabels(names)  
 pyplot.show()
-"""
