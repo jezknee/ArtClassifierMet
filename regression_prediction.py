@@ -6,6 +6,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest
 
 from sklearn import svm
 from numpy import set_printoptions, sqrt
@@ -39,7 +41,7 @@ for c in merged_df.columns:
     print("----")
     print(counts)
 """
-"""
+
 century_counts = merged_df["Century"].value_counts()
 century_list = []
 for century, count in century_counts.items():
@@ -52,7 +54,7 @@ print(merged_df.columns )
 century_counts = merged_df["Century"].value_counts()
 print("Century Counts:")
 print(century_counts)
-"""
+
 # Define color groups based on common web color names
 color_groups = {
     'whites': ['white', 'snow', 'ivory', 'linen', 'beige', 'aliceblue', 'ghostwhite', 
@@ -104,6 +106,12 @@ centur_col = merged_df[["Object Begin Date"]]
 temp_df = merged_df = merged_df.drop(columns=["Object ID", "Object Begin Date"])
 group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
 other_columns = [col for col in temp_df.columns if not col.startswith('Colo')]
+
+tag_df = temp_df.filter(items=other_columns, axis=1)
+print(tag_df.columns)
+
+
+
 df = pd.concat([object_id_col, temp_df[other_columns], temp_df[group_columns], centur_col], axis=1)
 print(df.columns)
 
@@ -115,7 +123,7 @@ test_size = 0.1
 seed = 7
 
 # feature extraction 
-test = SelectKBest(score_func=f_regression, k=25) 
+test = SelectKBest(score_func=f_regression, k=25000) 
 fit = test.fit(X, Y) 
 # summarize scores 
 set_printoptions(precision=3) 
@@ -137,7 +145,7 @@ for i, feature in enumerate(selected_features):
     print(f"{i+1}. {feature}")
 
 df2 = df.filter(items=["Object ID"] + selected_features + ["Object Begin Date"], axis=1)
-print(df2.head())
+print(df2.head(100))
 print(df2.columns)
 
 
@@ -203,7 +211,7 @@ for name, model in models:
         'Actual': Y_test,
         'Error': predicted - Y_test
     })
-    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions.csv", index=False)
+    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_allfeatures.csv", index=False)
     
     regression_results.append({
         'model': name,
