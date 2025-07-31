@@ -8,9 +8,10 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.neighbors import KNeighborsRegressor
 
 from sklearn import svm
-from numpy import set_printoptions 
+from numpy import set_printoptions, sqrt
 from sklearn.feature_selection import SelectKBest 
-from sklearn.feature_selection import chi2 
+from sklearn.feature_selection import f_regression
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 from pandas import read_csv 
 from matplotlib import pyplot 
@@ -105,7 +106,7 @@ group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')
 other_columns = [col for col in temp_df.columns if not col.startswith('Colo')]
 df = pd.concat([object_id_col, temp_df[other_columns], temp_df[group_columns], centur_col], axis=1)
 print(df.columns)
-"""
+
 names = df.columns.tolist()
 array = df.values
 X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Object Begin Date')
@@ -114,7 +115,7 @@ test_size = 0.1
 seed = 7
 
 # feature extraction 
-test = SelectKBest(score_func=chi2, k=25) 
+test = SelectKBest(score_func=f_regression, k=25) 
 fit = test.fit(X, Y) 
 # summarize scores 
 set_printoptions(precision=3) 
@@ -138,10 +139,10 @@ for i, feature in enumerate(selected_features):
 df2 = df.filter(items=["Object ID"] + selected_features + ["Object Begin Date"], axis=1)
 print(df2.head())
 print(df2.columns)
-"""
 
-names = df.columns.tolist()
-array = df.values
+
+names = df2.columns.tolist()
+array = df2.values
 X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Object Begin Date')
 Y = array[:, -1]    # Target variable (last column, 'Object Begin Date')
 test_size = 0.1
@@ -157,35 +158,77 @@ models.append(('KNN', KNeighborsRegressor()))
 models.append(('DTR', DecisionTreeRegressor()))
 # evaluate each model in turn 
 results = [] 
-names = [] 
-classification_results = []
-scoring = 'accuracy' 
+model_names = [] 
+regression_results = []
+scoring_metrics = ['neg_mean_squared_error', 'neg_mean_absolute_error', 'r2']
+
 for name, model in models: 
     kfold = KFold(n_splits=10, random_state=7,shuffle=True) 
-    cv_results = cross_val_score(model, X_train, Y_train, cv=kfold, scoring=scoring) 
-    results.append(cv_results) 
-    names.append(name) 
-    msg = "%s: %f (%f)" % (name, cv_results.mean(), cv_results.std()) 
-    print(msg) 
-"""
+    mse_scores = cross_val_score(model, X_train, Y_train, cv=kfold, scoring='neg_mean_squared_error')
+    mae_scores = cross_val_score(model, X_train, Y_train, cv=kfold, scoring='neg_mean_absolute_error') 
+    r2_scores = cross_val_score(model, X_train, Y_train, cv=kfold, scoring='r2')
+    
+    results.append(r2_scores)  # Use R² for the boxplot
+    model_names.append(name)
+    
+    # Print results
+    print(f"{name}:")
+    print(f"  RMSE: {sqrt(-mse_scores.mean()):.2f} (+/- {sqrt(mse_scores.std() * 2):.2f})")
+    print(f"  MAE: {-mae_scores.mean():.2f} (+/- {mae_scores.std() * 2:.2f})")
+    print(f"  R²: {r2_scores.mean():.3f} (+/- {r2_scores.std() * 2:.3f})")
+    
+    # Fit model and get test predictions
     model.fit(X_train, Y_train) 
-    predicted = model.predict(X_test) 
-    report = classification_report(Y_test, predicted, zero_division=0)
-    classification_results.append([name, report])
-"""
+    predicted = model.predict(X_test)
+    
+    # Calculate test metrics
+    test_mse = mean_squared_error(Y_test, predicted)
+    test_mae = mean_absolute_error(Y_test, predicted)
+    test_r2 = r2_score(Y_test, predicted)
 
-# boxplot algorithm comparison 
-fig = pyplot.figure()  
-fig.suptitle('Algorithm Comparison')  
+    
+    # Create predictions DataFrame - need to track test indices
+    # Get the original indices used in train_test_split
+    X_train_with_ids, X_test_with_ids, Y_train, Y_test = train_test_split(
+        df2[['Object ID'] + selected_features], df2['Object Begin Date'], 
+        test_size=test_size, random_state=seed
+    )
+
+    # Get Object IDs for test set
+    test_object_ids = X_test_with_ids['Object ID'].values
+
+    predictions_df = pd.DataFrame({
+        'Object ID': test_object_ids,
+        'Predicted': predicted,
+        'Actual': Y_test,
+        'Error': predicted - Y_test
+    })
+    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions.csv", index=False)
+    
+    regression_results.append({
+        'model': name,
+        'test_rmse': sqrt(test_mse),
+        'test_mae': test_mae,
+        'test_r2': test_r2
+    })
+    print(f"  Test RMSE: {sqrt(test_mse):.2f}")
+    print(f"  Test MAE: {test_mae:.2f}")
+    print(f"  Test R²: {test_r2:.3f}")
+    print("-" * 40)
+
+
+# Boxplot algorithm comparison (using R² scores)
+fig = pyplot.figure(figsize=(10, 6))
+fig.suptitle('Regression Algorithm Comparison (R² Score)')  
 ax = fig.add_subplot(111)  
 pyplot.boxplot(results)  
-ax.set_xticklabels(names)  
+ax.set_xticklabels(model_names)
+ax.set_ylabel('R² Score')
+pyplot.xticks(rotation=45)
 pyplot.show()
 
-"""
-print("Classification Reports:")
-for model_name, rpt in classification_results:
-    print(f"Model: {model_name}")
-    print(rpt)
-    print("="*50)
-"""
+print("\nRegression Results Summary:")
+print("Model\t\tTest RMSE\tTest MAE\tTest R²")
+print("-" * 50)
+for result in regression_results:
+    print(f"{result['model']}\t\t{result['test_rmse']:.2f}\t\t{result['test_mae']:.2f}\t\t{result['test_r2']:.3f}")
