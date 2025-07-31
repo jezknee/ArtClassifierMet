@@ -49,8 +49,8 @@ for col in merged_df.columns:
 #print(merged_df.head())
 print(merged_df.dtypes)
 merged_df["Century"] = merged_df["Object Begin Date"].apply(lambda x: "21st Century" if x >= 2000 else "20th Century" if x >= 1900 else "19th Century" if x >= 1800 else "18th Century" if x >= 1700 else "17th Century" if x >= 1600 else "16th Century" if x >= 1500 else "15th Century" if x >= 1400 else "14th Century" if x >= 1300 else "13th Century" if x >= 1200 else "12th Century" if x >= 1100 else "11th Century" if x >= 1000 else "10th Century" if x >= 900 else "9th Century" if x >= 800 else "8th Century" if x >= 700 else "7th Century" if x >= 600 else "6th Century" if x >= 500 else "5th Century" if x >= 400 else "4th Century" if x >= 300 else "3rd Century" if x >= 200 else "2nd Century" if x >= 100 else "1st Century" if x >= 0 else "BC" if x < 0 else "Unknown")
-#merged_df["Century_short"] = merged_df["Object Begin Date"].apply(lambda x: "21st or 20th Century" if x >= 1900 else "19th Century" if x >= 1800 else "18th Century" if x >= 1700 else "17th Century" if x >= 1600 else "16th Century or 15th Century" if x >= 1400 else "Before 15th Century" if x < 1400 else "Unknown")
-#merged_df["Century_binary"] = merged_df["Century_short"].apply(lambda x: "18th century or later" if x in ["18th Century", "19th Century", "20th Century", "21st Century"] else "Before 18th century" if x in ["17th Century", "16th Century or 15th Century", "Before 15th Century"] else "Unknown")
+merged_df["Century_short"] = merged_df["Object Begin Date"].apply(lambda x: "21st or 20th Century" if x >= 1900 else "19th Century" if x >= 1800 else "18th Century" if x >= 1700 else "17th Century" if x >= 1600 else "16th Century or 15th Century" if x >= 1400 else "Before 15th Century" if x < 1400 else "Unknown")
+merged_df["Century_binary"] = merged_df["Century_short"].apply(lambda x: "18th century or later" if x in ["18th Century", "19th Century", "20th Century", "21st Century"] else "Before 18th century" if x in ["17th Century", "16th Century or 15th Century", "Before 15th Century"] else "Unknown")
 
 merged_df = merged_df.loc[:, (merged_df != 0).any(axis=0)]
 
@@ -60,8 +60,8 @@ print(merged_df.columns)
 
 merged_df.drop(columns=["Object Number", "Gallery Number"], inplace=True)
 
-#merged_df.to_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", index=False)
-
+merged_df.to_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", index=False)
+"""
 # Prepare data for classification
 print("Preparing data for classification...")
 
@@ -106,6 +106,7 @@ for name, model in models:
     report = classification_report(Y_test, predicted, zero_division=0)
     classification_results.append([name, report])
 """
+"""
 # boxplot algorithm comparison 
 fig = pyplot.figure()  
 fig.suptitle('Algorithm Comparison')  
@@ -114,8 +115,11 @@ pyplot.boxplot(results)
 ax.set_xticklabels(names)  
 pyplot.show()
 """
+"""
 print("Classification Reports:")
 for model_name, rpt in classification_results:
     print(f"Model: {model_name}")
     print(rpt)
     print("="*50)
+"""
+
