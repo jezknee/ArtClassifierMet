@@ -2,10 +2,12 @@ from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import cross_val_score 
 from sklearn.metrics import classification_report 
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsRegressor
+
+from sklearn import svm
 from numpy import set_printoptions 
 from sklearn.feature_selection import SelectKBest 
 from sklearn.feature_selection import chi2 
@@ -15,12 +17,6 @@ from matplotlib import pyplot
 from sklearn.model_selection import train_test_split 
 from sklearn.model_selection import KFold 
 from sklearn.model_selection import cross_val_score 
-from sklearn.linear_model import LogisticRegression 
-from sklearn.tree import DecisionTreeClassifier 
-from sklearn.neighbors import KNeighborsClassifier 
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis 
-from sklearn.naive_bayes import GaussianNB 
-from sklearn.svm import SVC
 
 pd.set_option("display.max_columns", None)
 
@@ -33,7 +29,7 @@ print(merged_df.columns)
 # Prepare data for classification
 print("Preparing data for classification...")
 
-merged_df.drop(columns=["Department", "Object Name", "Title", "Object Begin Date", "Object End Date", "Medium", "Dimensions", "Century_binary", "Century_short"], inplace=True)
+merged_df.drop(columns=["Department", "Object Name", "Title", "Object End Date", "Medium", "Dimensions", "Century", "Century_binary", "Century_short"], inplace=True)
 #merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
 print(merged_df.columns)
 """
@@ -42,7 +38,7 @@ for c in merged_df.columns:
     print("----")
     print(counts)
 """
-
+"""
 century_counts = merged_df["Century"].value_counts()
 century_list = []
 for century, count in century_counts.items():
@@ -55,7 +51,7 @@ print(merged_df.columns )
 century_counts = merged_df["Century"].value_counts()
 print("Century Counts:")
 print(century_counts)
-
+"""
 # Define color groups based on common web color names
 color_groups = {
     'whites': ['white', 'snow', 'ivory', 'linen', 'beige', 'aliceblue', 'ghostwhite', 
@@ -103,17 +99,17 @@ for group_name in color_groups.keys():
 print(merged_df.columns)
 # Now you can drop the individual color columns and keep only the groups
 object_id_col = merged_df[["Object ID"]]
-centur_col = merged_df[["Century"]]
-temp_df = merged_df = merged_df.drop(columns=["Object ID", "Century"])
+centur_col = merged_df[["Object Begin Date"]]
+temp_df = merged_df = merged_df.drop(columns=["Object ID", "Object Begin Date"])
 group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
 other_columns = [col for col in temp_df.columns if not col.startswith('Colo')]
 df = pd.concat([object_id_col, temp_df[other_columns], temp_df[group_columns], centur_col], axis=1)
 print(df.columns)
-
+"""
 names = df.columns.tolist()
 array = df.values
-X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
-Y = array[:, -1]    # Target variable (last column, 'Century')
+X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Object Begin Date')
+Y = array[:, -1]    # Target variable (last column, 'Object Begin Date')
 test_size = 0.1
 seed = 7
 
@@ -139,28 +135,26 @@ print("Selected Features:")
 for i, feature in enumerate(selected_features):
     print(f"{i+1}. {feature}")
 
-df2 = df.filter(items=["Object ID"] + selected_features + ["Century"], axis=1)
+df2 = df.filter(items=["Object ID"] + selected_features + ["Object Begin Date"], axis=1)
 print(df2.head())
 print(df2.columns)
+"""
 
-
-names = df2.columns.tolist()
-array = df2.values
-X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
-Y = array[:, -1]    # Target variable (last column, 'Century')
+names = df.columns.tolist()
+array = df.values
+X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Object Begin Date')
+Y = array[:, -1]    # Target variable (last column, 'Object Begin Date')
 test_size = 0.1
 seed = 7
 
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=seed)
 models = [] 
-models.append(('LR', LogisticRegression(solver='liblinear'))) 
-models.append(('LDA', LinearDiscriminantAnalysis())) 
-models.append(('KNN', KNeighborsClassifier())) 
-models.append(('CART', DecisionTreeClassifier())) 
-models.append(('RF', RandomForestClassifier()))
-models.append(('NB', GaussianNB())) 
-models.append(('SVM', SVC())) 
+models.append(('SVR', svm.SVR())) 
+models.append(('RFR', RandomForestRegressor())) 
+models.append(('LnR', LinearRegression()))
+models.append(('KNN', KNeighborsRegressor()))
+models.append(('DTR', DecisionTreeRegressor()))
 # evaluate each model in turn 
 results = [] 
 names = [] 
@@ -173,12 +167,12 @@ for name, model in models:
     names.append(name) 
     msg = "%s: %f (%f)" % (name, cv_results.mean(), cv_results.std()) 
     print(msg) 
-
+"""
     model.fit(X_train, Y_train) 
     predicted = model.predict(X_test) 
     report = classification_report(Y_test, predicted, zero_division=0)
     classification_results.append([name, report])
-
+"""
 
 # boxplot algorithm comparison 
 fig = pyplot.figure()  
@@ -188,9 +182,10 @@ pyplot.boxplot(results)
 ax.set_xticklabels(names)  
 pyplot.show()
 
-
+"""
 print("Classification Reports:")
 for model_name, rpt in classification_results:
     print(f"Model: {model_name}")
     print(rpt)
     print("="*50)
+"""
