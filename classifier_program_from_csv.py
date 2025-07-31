@@ -28,21 +28,34 @@ merged_df = pd.DataFrame(merged)
 print("Preparing data for classification...")
 
 merged_df.drop(columns=["Department", "Object Name", "Title", "Object Begin Date", "Object End Date", "Medium", "Dimensions", "Century_binary", "Century_short"], inplace=True)
-merged_df = merged_df.filter(regex='^Colour_', axis=1)
-print(merged_df.head())
+merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
+#print(merged_df.head())
 """
 for c in merged_df.columns:
     counts = merged_df[c].value_counts()
     print("----")
     print(counts)
 """
-"""
-names = merged_df.columns.tolist()
-array = merged_df.values
+century_counts = merged_df["Century"].value_counts()
+century_list = []
+for century, count in century_counts.items():
+    if count >= 100:
+        century_list.append(century)
+
+df = merged_df[merged_df["Century"].isin(century_list)]
+
+century_counts = df["Century"].value_counts()
+print("Century Counts:")
+print(century_counts)
+
+names = df.columns.tolist()
+array = df.values
 X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
 Y = array[:, -1]    # Target variable (last column, 'Century')
 test_size = 0.1
 seed = 7
+
+
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=seed)
 models = [] 
@@ -86,4 +99,3 @@ for model_name, rpt in classification_results:
     print(f"Model: {model_name}")
     print(rpt)
     print("="*50)
-"""

@@ -60,18 +60,18 @@ print(merged_df.columns)
 
 merged_df.drop(columns=["Object Number", "Gallery Number"], inplace=True)
 
-merged_df.to_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", index=False)
+#merged_df.to_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", index=False)
 """
 # Prepare data for classification
 print("Preparing data for classification...")
 
 merged_df.drop(columns=["Department", "Object Name", "Title", "Object Begin Date", "Object End Date", "Medium", "Dimensions"], inplace=True)
-
+"""
 for c in merged_df.columns:
     counts = merged_df[c].value_counts()
     print("----")
     print(counts)
-
+"""
 names = merged_df.columns.tolist()
 array = merged_df.values
 X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
