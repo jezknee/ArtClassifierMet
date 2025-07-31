@@ -47,12 +47,61 @@ for century, count in century_counts.items():
     if count >= 100:
         century_list.append(century)
 
-df = merged_df[merged_df["Century"].isin(century_list)]
+merged_df = merged_df[merged_df["Century"].isin(century_list)]
 
-century_counts = df["Century"].value_counts()
+century_counts = merged_df["Century"].value_counts()
 print("Century Counts:")
 print(century_counts)
 
+# Define color groups based on common web color names
+color_groups = {
+    'whites': ['white', 'snow', 'ivory', 'linen', 'beige', 'aliceblue', 'ghostwhite', 
+               'whitesmoke', 'seashell', 'oldlace', 'floralwhite', 'lightcyan', 'honeydew'],
+    'blacks': ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'lightgray', 'gainsboro'],
+    'reds': ['red', 'darkred', 'crimson', 'firebrick', 'indianred', 'lightcoral', 
+             'salmon', 'darksalmon', 'lightsalmon', 'pink', 'lightpink', 'hotpink'],
+    'blues': ['blue', 'navy', 'darkblue', 'mediumblue', 'royalblue', 'steelblue', 
+              'lightsteelblue', 'lightblue', 'powderblue', 'lightskyblue', 'skyblue'],
+    'greens': ['green', 'darkgreen', 'forestgreen', 'limegreen', 'lime', 'lightgreen',
+               'palegreen', 'darkseagreen', 'mediumseagreen', 'seagreen', 'olive'],
+    'yellows': ['yellow', 'gold', 'orange', 'darkorange', 'lightyellow', 'lemonchiffon',
+                'lightgoldenrodyellow', 'papayawhip', 'moccasin', 'peachpuff'],
+    'purples': ['purple', 'indigo', 'darkviolet', 'blueviolet', 'mediumorchid', 
+                'plum', 'violet', 'magenta', 'fuchsia', 'darkmagenta'],
+    'browns': ['brown', 'maroon', 'darkgoldenrod', 'goldenrod', 'rosybrown', 
+               'sandybrown', 'tan', 'burlywood', 'wheat', 'navajowhite', 'bisque']
+}
+
+# Function to map colors to groups
+def get_color_group(color_name):
+    color_name = color_name.lower()
+    for group, colors in color_groups.items():
+        if color_name in colors:
+            return group
+    return 'other'  # For colors not in any group
+
+# Apply grouping to your DataFrame
+# Get all Colour_ columns
+colour_columns = [col for col in merged_df.columns if col.startswith('Colour_')]
+
+# Create new grouped columns
+for group_name in color_groups.keys():
+    # Find all columns that belong to this color group
+    group_columns = []
+    for col in colour_columns:
+        color_name = col.replace('Colour_', '')  # Extract color name
+        if get_color_group(color_name) == group_name:
+            group_columns.append(col)
+    
+    # Sum all columns in this group
+    if group_columns:
+        merged_df[f'ColorGroup_{group_name}'] = merged_df[group_columns].sum(axis=1)
+        print(f"{group_name}: {len(group_columns)} colors grouped")
+
+# Now you can drop the individual color columns and keep only the groups
+group_columns = [col for col in merged_df.columns if col.startswith('ColorGroup_')]
+other_columns = [col for col in merged_df.columns if not col.startswith('Colour_')]
+df = merged_df[["Object ID"] + group_columns + ["Century"]]
 
 names = df.columns.tolist()
 array = df.values
@@ -60,7 +109,7 @@ X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
 Y = array[:, -1]    # Target variable (last column, 'Century')
 test_size = 0.1
 seed = 7
-
+"""
 # feature extraction 
 test = SelectKBest(score_func=chi2, k=10) 
 fit = test.fit(X, Y) 
@@ -86,6 +135,7 @@ for i, feature in enumerate(selected_features):
 df = df.filter(items=["Object ID"] + selected_features + ["Century"], axis=1)
 print(df.head())
 print(df.columns)
+"""
 
 names = df.columns.tolist()
 array = df.values
