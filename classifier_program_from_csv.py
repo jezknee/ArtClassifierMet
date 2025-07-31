@@ -28,19 +28,21 @@ pd.set_option("display.max_columns", None)
 
 merged = pd.read_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", encoding="utf-8")
 merged_df = pd.DataFrame(merged)
+print(merged_df.columns)
 
 # Prepare data for classification
 print("Preparing data for classification...")
 
 merged_df.drop(columns=["Department", "Object Name", "Title", "Object Begin Date", "Object End Date", "Medium", "Dimensions", "Century_binary", "Century_short"], inplace=True)
-merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
-#print(merged_df.head())
+#merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
+print(merged_df.columns)
 """
 for c in merged_df.columns:
     counts = merged_df[c].value_counts()
     print("----")
     print(counts)
 """
+
 century_counts = merged_df["Century"].value_counts()
 century_list = []
 for century, count in century_counts.items():
@@ -48,6 +50,7 @@ for century, count in century_counts.items():
         century_list.append(century)
 
 merged_df = merged_df[merged_df["Century"].isin(century_list)]
+print(merged_df.columns )
 
 century_counts = merged_df["Century"].value_counts()
 print("Century Counts:")
@@ -97,11 +100,15 @@ for group_name in color_groups.keys():
     if group_columns:
         merged_df[f'ColorGroup_{group_name}'] = merged_df[group_columns].sum(axis=1)
         print(f"{group_name}: {len(group_columns)} colors grouped")
-
+print(merged_df.columns)
 # Now you can drop the individual color columns and keep only the groups
-group_columns = [col for col in merged_df.columns if col.startswith('ColorGroup_')]
-other_columns = [col for col in merged_df.columns if not col.startswith('Colour_')]
-df = merged_df[["Object ID"] + group_columns + ["Century"]]
+object_id_col = merged_df[["Object ID"]]
+centur_col = merged_df[["Century"]]
+temp_df = merged_df = merged_df.drop(columns=["Object ID", "Century"])
+group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
+other_columns = [col for col in temp_df.columns if not col.startswith('Colo')]
+df = pd.concat([object_id_col, temp_df[other_columns], temp_df[group_columns], centur_col], axis=1)
+print(df.columns)
 
 names = df.columns.tolist()
 array = df.values
@@ -109,16 +116,16 @@ X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Century')
 Y = array[:, -1]    # Target variable (last column, 'Century')
 test_size = 0.1
 seed = 7
-"""
+
 # feature extraction 
-test = SelectKBest(score_func=chi2, k=10) 
+test = SelectKBest(score_func=chi2, k=25) 
 fit = test.fit(X, Y) 
 # summarize scores 
 set_printoptions(precision=3) 
 print(fit.scores_) 
 features = fit.transform(X) 
 # summarize selected features 
-print(features[0:10,:]) 
+print(features[0:25,:]) 
 
 feature_names = names[2:-1]  # This matches your X array slice
 
@@ -132,10 +139,10 @@ print("Selected Features:")
 for i, feature in enumerate(selected_features):
     print(f"{i+1}. {feature}")
 
-df = df.filter(items=["Object ID"] + selected_features + ["Century"], axis=1)
-print(df.head())
-print(df.columns)
-"""
+df2 = df.filter(items=["Object ID"] + selected_features + ["Century"], axis=1)
+print(df2.head())
+print(df2.columns)
+
 
 names = df.columns.tolist()
 array = df.values
