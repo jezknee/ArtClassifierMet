@@ -23,18 +23,19 @@ from sklearn.model_selection import cross_val_score
 
 pd.set_option("display.max_columns", None)
 
-
+test_size = 0.1
+seed = 7
 
 merged = pd.read_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", encoding="utf-8")
 merged_df = pd.DataFrame(merged)
-print(merged_df.columns)
+#print(merged_df.columns)
 
 # Prepare data for classification
-print("Preparing data for classification...")
+#print("Preparing data for classification...")
 
-merged_df.drop(columns=["Department", "Object Name", "Title", "Object End Date", "Medium", "Dimensions", "Century", "Century_binary", "Century_short"], inplace=True)
+merged_df.drop(columns=["Department", "Object Name", "Title", "Object End Date", "Medium", "Dimensions", "Century_binary", "Century_short"], inplace=True)
 #merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
-print(merged_df.columns)
+#print(merged_df.columns)
 """
 for c in merged_df.columns:
     counts = merged_df[c].value_counts()
@@ -49,12 +50,13 @@ for century, count in century_counts.items():
         century_list.append(century)
 
 merged_df = merged_df[merged_df["Century"].isin(century_list)]
-print(merged_df.columns )
+#print(merged_df.columns )
 
 century_counts = merged_df["Century"].value_counts()
-print("Century Counts:")
-print(century_counts)
+#print("Century Counts:")
+#print(century_counts)
 
+merged_df.drop(columns=["Century"], inplace=True)
 # Define color groups based on common web color names
 color_groups = {
     'whites': ['white', 'snow', 'ivory', 'linen', 'beige', 'aliceblue', 'ghostwhite', 
@@ -99,65 +101,53 @@ for group_name in color_groups.keys():
     if group_columns:
         merged_df[f'ColorGroup_{group_name}'] = merged_df[group_columns].sum(axis=1)
         print(f"{group_name}: {len(group_columns)} colors grouped")
-print(merged_df.columns)
+#print(merged_df.columns)
 # Now you can drop the individual color columns and keep only the groups
 object_id_col = merged_df[["Object ID"]]
 centur_col = merged_df[["Object Begin Date"]]
-temp_df = merged_df = merged_df.drop(columns=["Object ID", "Object Begin Date"])
+temp_df = merged_df #= merged_df.drop(columns=["Object ID", "Object Begin Date"])
 group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
-other_columns = [col for col in temp_df.columns if not col.startswith('Colo')]
+# Fixed code:
+# Exclude Object ID and Object Begin Date from features
+feature_columns = [col for col in temp_df.columns if not col.startswith('Colo') 
+                   and col not in ['Object ID', 'Object Begin Date']]
+group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
+all_feature_columns = feature_columns + group_columns
 
-tag_df = temp_df.filter(items=other_columns, axis=1)
-print(tag_df.columns)
+# Create the feature matrix
+X = temp_df[all_feature_columns]
+y = temp_df["Object Begin Date"]
+object_ids = temp_df["Object ID"]
 
+X_train, X_test, Y_train, Y_test, ids_train, ids_test = train_test_split(
+    X, y, object_ids, test_size=test_size, random_state=seed)
 
+def apply_PCA(X, Y, ids):
+    # Now apply PCA
+    X_train_values = X.values
+    pca = PCA(n_components=10) 
+    pca_result = pca.fit_transform(X_train_values)
 
-df = pd.concat([object_id_col, temp_df[other_columns], temp_df[group_columns], centur_col], axis=1)
-print(df.columns)
+    # Create DataFrame with PCA components, Object IDs, and target
+    pca_columns = [f'PC{i+1}' for i in range(10)]
+    pca_df = pd.DataFrame(pca_result, columns=pca_columns, index=X.index)
 
-names = df.columns.tolist()
-array = df.values
-X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Object Begin Date')
-Y = array[:, -1]    # Target variable (last column, 'Object Begin Date')
-test_size = 0.1
-seed = 7
+    # Combine with Object IDs and target variable
+    result_df = pd.concat([
+        ids.reset_index(drop=True),
+        pca_df.reset_index(drop=True),
+        Y.reset_index(drop=True).rename('Object Begin Date')
+    ], axis=1)
 
-# feature extraction 
-test = SelectKBest(score_func=f_regression, k=25000) 
-fit = test.fit(X, Y) 
-# summarize scores 
-set_printoptions(precision=3) 
-print(fit.scores_) 
-features = fit.transform(X) 
-# summarize selected features 
-print(features[0:25,:]) 
+    print("PCA DataFrame with Object ID and target:")
+    print(result_df.head())
 
-feature_names = names[2:-1]  # This matches your X array slice
+    X_final = result_df.drop(columns=['Object ID', 'Object Begin Date'])
+    Y_final = result_df['Object Begin Date']
 
-# Get which features were selected
-selected_mask = test.get_support()
-
-# Get the names of selected features
-selected_features = [feature_names[i] for i in range(len(feature_names)) if selected_mask[i]]
-feature_list = [feature for feature in selected_features]
-print("Selected Features:")
-for i, feature in enumerate(selected_features):
-    print(f"{i+1}. {feature}")
-
-df2 = df.filter(items=["Object ID"] + selected_features + ["Object Begin Date"], axis=1)
-print(df2.head(100))
-print(df2.columns)
+    return X_final, Y_final
 
 
-names = df2.columns.tolist()
-array = df2.values
-X = array[:, 2:-1]  # Features (excluding 'Object ID' and 'Object Begin Date')
-Y = array[:, -1]    # Target variable (last column, 'Object Begin Date')
-test_size = 0.1
-seed = 7
-
-
-X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=test_size, random_state=seed)
 models = [] 
 models.append(('SVR', svm.SVR())) 
 models.append(('RFR', RandomForestRegressor())) 
@@ -171,11 +161,13 @@ regression_results = []
 scoring_metrics = ['neg_mean_squared_error', 'neg_mean_absolute_error', 'r2']
 
 for name, model in models: 
+    X_train_pca, Y_train_pca = apply_PCA(X_train, Y_train, ids_train)
+    X_test_pca, Y_test_pca = apply_PCA(X_test, Y_test, ids_test)
     kfold = KFold(n_splits=10, random_state=7,shuffle=True) 
-    mse_scores = cross_val_score(model, X_train, Y_train, cv=kfold, scoring='neg_mean_squared_error')
-    mae_scores = cross_val_score(model, X_train, Y_train, cv=kfold, scoring='neg_mean_absolute_error') 
-    r2_scores = cross_val_score(model, X_train, Y_train, cv=kfold, scoring='r2')
-    
+    mse_scores = cross_val_score(model, X_train_pca, Y_train_pca, cv=kfold, scoring='neg_mean_squared_error')
+    mae_scores = cross_val_score(model, X_train_pca, Y_train_pca, cv=kfold, scoring='neg_mean_absolute_error') 
+    r2_scores = cross_val_score(model, X_train_pca, Y_train_pca, cv=kfold, scoring='r2')
+
     results.append(r2_scores)  # Use R² for the boxplot
     model_names.append(name)
     
@@ -186,33 +178,22 @@ for name, model in models:
     print(f"  R²: {r2_scores.mean():.3f} (+/- {r2_scores.std() * 2:.3f})")
     
     # Fit model and get test predictions
-    model.fit(X_train, Y_train) 
-    predicted = model.predict(X_test)
+    model.fit(X_train_pca, Y_train_pca) 
+    predicted = model.predict(X_test_pca)
     
     # Calculate test metrics
-    test_mse = mean_squared_error(Y_test, predicted)
-    test_mae = mean_absolute_error(Y_test, predicted)
-    test_r2 = r2_score(Y_test, predicted)
-
-    
-    # Create predictions DataFrame - need to track test indices
-    # Get the original indices used in train_test_split
-    X_train_with_ids, X_test_with_ids, Y_train, Y_test = train_test_split(
-        df2[['Object ID'] + selected_features], df2['Object Begin Date'], 
-        test_size=test_size, random_state=seed
-    )
-
-    # Get Object IDs for test set
-    test_object_ids = X_test_with_ids['Object ID'].values
+    test_mse = mean_squared_error(Y_test_pca, predicted)
+    test_mae = mean_absolute_error(Y_test_pca, predicted)
+    test_r2 = r2_score(Y_test_pca, predicted)
 
     predictions_df = pd.DataFrame({
-        'Object ID': test_object_ids,
+        'Object ID': ids_test,
         'Predicted': predicted,
         'Actual': Y_test,
         'Error': predicted - Y_test
     })
-    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_allfeatures.csv", index=False)
-    
+    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_allfeatures_filteredcenturies.csv", index=False)
+
     regression_results.append({
         'model': name,
         'test_rmse': sqrt(test_mse),
@@ -240,3 +221,16 @@ print("Model\t\tTest RMSE\tTest MAE\tTest R²")
 print("-" * 50)
 for result in regression_results:
     print(f"{result['model']}\t\t{result['test_rmse']:.2f}\t\t{result['test_mae']:.2f}\t\t{result['test_r2']:.3f}")
+
+"""    
+    # Create predictions DataFrame - need to track test indices
+    # Get the original indices used in train_test_split
+    X_train_with_ids, X_test_with_ids, Y_train, Y_test = train_test_split(
+        df2[['Object ID'] + selected_features], df2['Object Begin Date'], 
+        test_size=test_size, random_state=seed
+    )
+
+    # Get Object IDs for test set
+    test_object_ids = X_test_with_ids['Object ID'].values
+"""
+    
