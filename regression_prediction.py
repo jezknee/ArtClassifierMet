@@ -197,7 +197,7 @@ for name, model in models:
         'Actual': Y_test,
         'Error': predicted - Y_test
     })
-    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_allfeatures_filteredcenturies.csv", index=False)
+    predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_final.csv", index=False)
 
     regression_results.append({
         'model': name,
@@ -227,15 +227,4 @@ print("-" * 50)
 for result in regression_results:
     print(f"{result['model']}\t\t{result['test_rmse']:.2f}\t\t{result['test_mae']:.2f}\t\t{result['test_r2']:.3f}")
 
-"""    
-    # Create predictions DataFrame - need to track test indices
-    # Get the original indices used in train_test_split
-    X_train_with_ids, X_test_with_ids, Y_train, Y_test = train_test_split(
-        df2[['Object ID'] + selected_features], df2['Object Begin Date'], 
-        test_size=test_size, random_state=seed
-    )
-
-    # Get Object IDs for test set
-    test_object_ids = X_test_with_ids['Object ID'].values
-"""
     
