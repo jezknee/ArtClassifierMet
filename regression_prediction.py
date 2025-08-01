@@ -240,12 +240,12 @@ for name, model in models:
     test_r2 = r2_score(Y_test_pca, predicted)
 
     predictions_df = pd.DataFrame({
-        'Object ID': ids_test,
-        'Predicted': predicted,
-        'Actual': Y_test,
+        'Object ID': ids_test.astype(str).str.strip().str.replace(r'\s+', ' ', regex=True).str.replace('\n', ''),
+        'Predicted': predicted.astype(int),
+        'Actual': Y_test.astype(int),
         'Error': predicted - Y_test
     })
-
+    print(predictions_df.head())
 
     predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_final.csv", index=False)
 
