@@ -24,17 +24,13 @@ from sklearn.svm import SVC
 
 pd.set_option("display.max_columns", None)
 
-
-
 merged = pd.read_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", encoding="utf-8")
 merged_df = pd.DataFrame(merged)
 print(merged_df.columns)
 
-# Prepare data for classification
 print("Preparing data for classification...")
 
 merged_df.drop(columns=["Department", "Object Name", "Title", "Object Begin Date", "Object End Date", "Medium", "Dimensions", "Century_binary", "Century_short"], inplace=True)
-#merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
 print(merged_df.columns)
 """
 for c in merged_df.columns:
@@ -83,8 +79,6 @@ def get_color_group(color_name):
             return group
     return 'other'  # For colors not in any group
 
-# Apply grouping to your DataFrame
-# Get all Colour_ columns
 colour_columns = [col for col in merged_df.columns if col.startswith('Colour_')]
 
 # Create new grouped columns
@@ -101,7 +95,7 @@ for group_name in color_groups.keys():
         merged_df[f'ColorGroup_{group_name}'] = merged_df[group_columns].sum(axis=1)
         print(f"{group_name}: {len(group_columns)} colors grouped")
 print(merged_df.columns)
-# Now you can drop the individual color columns and keep only the groups
+
 object_id_col = merged_df[["Object ID"]]
 centur_col = merged_df[["Century"]]
 temp_df = merged_df = merged_df.drop(columns=["Object ID", "Century"])

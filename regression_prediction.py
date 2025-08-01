@@ -28,20 +28,10 @@ seed = 7
 
 merged = pd.read_csv(Path.cwd() / "Data" / "MetObjWithImageColoursMetadata.csv", encoding="utf-8")
 merged_df = pd.DataFrame(merged)
-#print(merged_df.columns)
 
-# Prepare data for classification
-#print("Preparing data for classification...")
 
 merged_df.drop(columns=["Department", "Object Name", "Title", "Object End Date", "Medium", "Dimensions", "Century_binary", "Century_short"], inplace=True)
-#merged_df = merged_df.filter(regex='^(Object ID|Colour_|Century)', axis=1)
-#print(merged_df.columns)
-"""
-for c in merged_df.columns:
-    counts = merged_df[c].value_counts()
-    print("----")
-    print(counts)
-"""
+
 
 century_counts = merged_df["Century"].value_counts()
 century_list = []
@@ -84,7 +74,6 @@ def get_color_group(color_name):
             return group
     return 'other'  # For colors not in any group
 
-# Apply grouping to your DataFrame
 # Get all Colour_ columns
 colour_columns = [col for col in merged_df.columns if col.startswith('Colour_')]
 
@@ -100,15 +89,12 @@ for group_name in color_groups.keys():
     # Sum all columns in this group
     if group_columns:
         merged_df[f'ColorGroup_{group_name}'] = merged_df[group_columns].sum(axis=1)
-        #print(f"{group_name}: {len(group_columns)} colors grouped")
-#print(merged_df.columns)
-# Now you can drop the individual color columns and keep only the groups
+
 object_id_col = merged_df[["Object ID"]]
 centur_col = merged_df[["Object Begin Date"]]
-temp_df = merged_df #= merged_df.drop(columns=["Object ID", "Object Begin Date"])
+temp_df = merged_df
 group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
-# Fixed code:
-# Exclude Object ID and Object Begin Date from features
+
 feature_columns = [col for col in temp_df.columns if not col.startswith('Colo') 
                    and col not in ['Object ID', 'Object Begin Date']]
 group_columns = [col for col in temp_df.columns if col.startswith('ColorGroup_')]
@@ -122,11 +108,6 @@ object_ids = temp_df["Object ID"]
 X_train, X_test, Y_train, Y_test, ids_train, ids_test = train_test_split(
     X, y, object_ids, test_size=test_size, random_state=seed)
 
-# KEY CHANGES FROM YOUR ORIGINAL CODE:
-
-# 1. FUNCTION SIGNATURE CHANGE:
-# OLD: def apply_PCA(X, Y, ids):
-# NEW: def apply_PCA_fit(X_train, X_test, Y_train, Y_test, ids_train, ids_test):
 def apply_PCA_fit(X_train, X_test, Y_train, Y_test, ids_train, ids_test):
     """
     Fit PCA on training data and transform both training and test data
@@ -134,14 +115,10 @@ def apply_PCA_fit(X_train, X_test, Y_train, Y_test, ids_train, ids_test):
     feature_columns = [col for col in X_train.columns if not col.startswith('ColorGroup_')]
     group_columns = [col for col in X_train.columns if col.startswith('ColorGroup_')]
     
-    # 2. FIT PCA ONLY ON TRAINING DATA:
     X_train_values = X_train[feature_columns].values
     pca = PCA(n_components=10) 
     pca_train_result = pca.fit_transform(X_train_values)  # fit_transform on training
     
-    # 3. TRANSFORM TEST DATA WITH SAME PCA:
-    # OLD: You were calling apply_PCA separately for test data
-    # NEW: Use the same fitted PCA to transform test data
     X_test_values = X_test[feature_columns].values
     pca_test_result = pca.transform(X_test_values)  # Only transform, don't fit
     
@@ -170,9 +147,6 @@ def apply_PCA_fit(X_train, X_test, Y_train, Y_test, ids_train, ids_test):
         Y_test.reset_index(drop=True).rename('Object Begin Date')
     ], axis=1)
     
-    # 4. RETURN BOTH TRAIN AND TEST DATA:
-    # OLD: return X_final, Y_final (only one set)
-    # NEW: return all four arrays
     X_train_final = train_result_df.drop(columns=['Object ID', 'Object Begin Date'])
     Y_train_final = train_result_df['Object Begin Date']
     X_test_final = test_result_df.drop(columns=['Object ID', 'Object Begin Date'])
@@ -187,10 +161,6 @@ models.append(('LnR', LinearRegression()))
 models.append(('KNN', KNeighborsRegressor()))
 models.append(('DTR', DecisionTreeRegressor()))
 
-# 5. CALL PCA ONCE OUTSIDE THE LOOP:
-# OLD: X_train_pca, Y_train_pca = apply_PCA(X_train, Y_train, ids_train)
-#      X_test_pca, Y_test_pca = apply_PCA(X_test, Y_test, ids_test)  # Inside loop!
-# NEW: Single call before the loop
 print("Applying PCA transformation...")
 X_train_pca, X_test_pca, Y_train_pca, Y_test_pca = apply_PCA_fit(X_train, X_test, Y_train, Y_test, ids_train, ids_test)
 
@@ -199,12 +169,11 @@ print(f"Test set shape: {X_test_pca.shape}")
 print(f"Training target shape: {Y_train_pca.shape}")
 print(f"Test target shape: {Y_test_pca.shape}")
 
-# After calling apply_PCA_fit, verify the order is preserved
 print("Verifying data alignment...")
 print("First 5 Object IDs in ids_test:", ids_test.iloc[:5].values)
 print("First 5 Y_test values:", Y_test.iloc[:5].values)
 
-# If you still have Y_test_pca, check if they match Y_test
+
 if 'Y_test_pca' in locals():
     print("Y_test matches Y_test_pca:", (Y_test.values == Y_test_pca.values).all())
 
@@ -214,11 +183,6 @@ regression_results = []
 
 for name, model in models: 
     print(f"Evaluating model: {name}")
-    # 6. REMOVED PCA CALLS FROM INSIDE THE LOOP:
-    # OLD: X_train_pca, Y_train_pca = apply_PCA(X_train, Y_train, ids_train)
-    #      X_test_pca, Y_test_pca = apply_PCA(X_test, Y_test, ids_test)
-    # NEW: Use the pre-computed PCA data
-    
     kfold = KFold(n_splits=10, random_state=7, shuffle=True) 
     mse_scores = cross_val_score(model, X_train_pca, Y_train_pca, cv=kfold, scoring='neg_mean_squared_error')
     mae_scores = cross_val_score(model, X_train_pca, Y_train_pca, cv=kfold, scoring='neg_mean_absolute_error') 
