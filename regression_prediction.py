@@ -199,6 +199,15 @@ print(f"Test set shape: {X_test_pca.shape}")
 print(f"Training target shape: {Y_train_pca.shape}")
 print(f"Test target shape: {Y_test_pca.shape}")
 
+# After calling apply_PCA_fit, verify the order is preserved
+print("Verifying data alignment...")
+print("First 5 Object IDs in ids_test:", ids_test.iloc[:5].values)
+print("First 5 Y_test values:", Y_test.iloc[:5].values)
+
+# If you still have Y_test_pca, check if they match Y_test
+if 'Y_test_pca' in locals():
+    print("Y_test matches Y_test_pca:", (Y_test.values == Y_test_pca.values).all())
+
 results = [] 
 model_names = [] 
 regression_results = []
@@ -233,9 +242,10 @@ for name, model in models:
     predictions_df = pd.DataFrame({
         'Object ID': ids_test,
         'Predicted': predicted,
-        'Actual': Y_test_pca,
-        'Error': predicted - Y_test_pca
+        'Actual': Y_test,
+        'Error': predicted - Y_test
     })
+
 
     predictions_df.to_csv(Path.cwd() / "Data" / f"{name}_predictions_final.csv", index=False)
 
