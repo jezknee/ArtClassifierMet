@@ -100,7 +100,7 @@ for group_name in color_groups.keys():
     # Sum all columns in this group
     if group_columns:
         merged_df[f'ColorGroup_{group_name}'] = merged_df[group_columns].sum(axis=1)
-        print(f"{group_name}: {len(group_columns)} colors grouped")
+        #print(f"{group_name}: {len(group_columns)} colors grouped")
 #print(merged_df.columns)
 # Now you can drop the individual color columns and keep only the groups
 object_id_col = merged_df[["Object ID"]]
@@ -123,30 +123,34 @@ X_train, X_test, Y_train, Y_test, ids_train, ids_test = train_test_split(
     X, y, object_ids, test_size=test_size, random_state=seed)
 
 def apply_PCA(X, Y, ids):
-    # Now apply PCA
-    X_train_values = X.values
+    
+    feature_columns = [col for col in X.columns if not col.startswith('Colo') and col not in ['Object ID', 'Object Begin Date']]
+    group_columns = [col for col in X.columns if col.startswith('ColorGroup_')]
+
+    X_train_values = X[feature_columns].values
     pca = PCA(n_components=10) 
     pca_result = pca.fit_transform(X_train_values)
 
     # Create DataFrame with PCA components, Object IDs, and target
     pca_columns = [f'PC{i+1}' for i in range(10)]
     pca_df = pd.DataFrame(pca_result, columns=pca_columns, index=X.index)
+    group_df = pd.DataFrame(X[group_columns].values, columns=group_columns, index=X.index)
 
     # Combine with Object IDs and target variable
     result_df = pd.concat([
         ids.reset_index(drop=True),
         pca_df.reset_index(drop=True),
+        group_df.reset_index(drop=True),
         Y.reset_index(drop=True).rename('Object Begin Date')
     ], axis=1)
 
-    print("PCA DataFrame with Object ID and target:")
-    print(result_df.head())
+    #print("PCA DataFrame with Object ID and target:")
+    #print(result_df.head())
 
     X_final = result_df.drop(columns=['Object ID', 'Object Begin Date'])
     Y_final = result_df['Object Begin Date']
 
     return X_final, Y_final
-
 
 models = [] 
 models.append(('SVR', svm.SVR())) 
@@ -161,6 +165,7 @@ regression_results = []
 scoring_metrics = ['neg_mean_squared_error', 'neg_mean_absolute_error', 'r2']
 
 for name, model in models: 
+    print(f"Evaluating model: {name}")
     X_train_pca, Y_train_pca = apply_PCA(X_train, Y_train, ids_train)
     X_test_pca, Y_test_pca = apply_PCA(X_test, Y_test, ids_test)
     kfold = KFold(n_splits=10, random_state=7,shuffle=True) 
